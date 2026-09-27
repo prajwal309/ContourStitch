@@ -1,0 +1,6 @@
+'use client';
+import {useEffect,useRef} from 'react';
+import {samplingLevels} from '@/lib/measurement/landmarks';
+import type {Capture} from '@/lib/vision/types';
+/** Explicit development-only query flag: ?debug=1. No photos or geometry are persisted. */
+export function DebugReview({capture}:{capture:Capture}){const canvas=useRef<HTMLCanvasElement>(null);useEffect(()=>{const context=canvas.current?.getContext('2d'),mask=capture.mask;if(!context||!mask||!canvas.current)return;canvas.current.width=mask.width;canvas.current.height=mask.height;const pixels=context.createImageData(mask.width,mask.height);for(let i=0;i<mask.data.length;i++){pixels.data[i*4]=60;pixels.data[i*4+1]=95;pixels.data[i*4+2]=70;pixels.data[i*4+3]=Math.round(mask.data[i]*255);}context.putImageData(pixels,0,0);const levels=samplingLevels(capture);if(levels){context.strokeStyle='#bd3627';context.fillStyle='#bd3627';for(const key of ['chest','waist','hip'] as const){const y=levels[key]*mask.height;context.beginPath();context.moveTo(0,y);context.lineTo(mask.width,y);context.stroke();context.fillText(key,5,y-3);}}},[capture]);return <details><summary>Development: captured mask and sampling levels</summary><canvas ref={canvas} style={{width:'100%'}}/></details>;}

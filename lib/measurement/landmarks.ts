@@ -1,0 +1,5 @@
+import type {Landmark,VisionFrame} from '@/lib/vision/types';
+import {config} from './config';
+export function usable(point:Landmark|undefined):point is Landmark{return !!point&&[point.x,point.y,point.visibility].every(Number.isFinite)&&point.visibility>=config.minVisibility&&point.x>0&&point.x<1&&point.y>0&&point.y<1;}
+export function landmarkPath(points:(Landmark|undefined)[],width:number,height:number):number|null{if(points.length<2||!points.every(usable)||width<=0||height<=0)return null;let total=0;for(let i=1;i<points.length;i++){const a=points[i-1]!,b=points[i]!;total+=Math.hypot((a.x-b.x)*width,(a.y-b.y)*height);}return total;}
+export function samplingLevels(frame:VisionFrame){const p=frame.landmarks;const shoulders=[p[11],p[12]],hips=[p[23],p[24]];if(!shoulders.every(usable)||!hips.every(usable))return null;const sy=(p[11].y+p[12].y)/2,hy=(p[23].y+p[24].y)/2;if(hy<=sy)return null;return {chest:sy+(hy-sy)*config.sampleFractions.chest,waist:sy+(hy-sy)*config.sampleFractions.waist,hip:hy,centerX:(p[11].x+p[12].x+p[23].x+p[24].x)/4};}

@@ -1,0 +1,6 @@
+import {describe,it,expect,vi} from 'vitest';
+import {render,screen,fireEvent} from '@testing-library/react';
+import {HeightForm} from '@/components/measurement/HeightForm';
+import {cmToInches,inchesToCm,validHeight} from '@/lib/measurement/units';
+import {mockReport} from '@/lib/measurement/mock';
+describe('foundation',()=>{it('converts units without losing physical scale',()=>{expect(inchesToCm(12)).toBeCloseTo(30.48);expect(cmToInches(182.88)).toBeCloseTo(72);expect(validHeight(NaN)).toBe(false);});it('validates height before continuing',()=>{const next=vi.fn();render(<HeightForm onContinue={next}/>);fireEvent.change(screen.getByLabelText('Height in centimetres'),{target:{value:'80'}});fireEvent.click(screen.getByText('Continue to photos →'));expect(screen.getByRole('alert')).toHaveTextContent('100 and 230');expect(next).not.toHaveBeenCalled();fireEvent.change(screen.getByLabelText('Height in centimetres'),{target:{value:'180'}});fireEvent.click(screen.getByText('Continue to photos →'));expect(next).toHaveBeenCalledWith(180);});it('switches height units',()=>{render(<HeightForm onContinue={()=>{}}/>);fireEvent.click(screen.getByText('Feet & inches'));expect(screen.getByLabelText('Feet')).toHaveValue(5);});it('has eight deterministic mock estimates',()=>{expect(mockReport().estimates).toHaveLength(8);expect(mockReport()).toEqual(mockReport());});});

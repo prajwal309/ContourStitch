@@ -1,0 +1,3 @@
+import type {Landmark} from '@/lib/vision/types';
+const edges=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,31],[28,32]];
+export function PoseOverlay({landmarks,width,height}:{landmarks:Landmark[];width:number;height:number}){return <svg className="pose-overlay" viewBox={`0 0 ${width} ${height}`} aria-hidden="true">{edges.map(([a,b])=>landmarks[a]?.visibility>.65&&landmarks[b]?.visibility>.65?<line key={`${a}-${b}`} x1={landmarks[a].x*width} y1={landmarks[a].y*height} x2={landmarks[b].x*width} y2={landmarks[b].y*height} stroke="#def7be" strokeWidth="2"/>:null)}{landmarks.map((p,i)=>p.visibility>.65?<circle key={i} cx={p.x*width} cy={p.y*height} r="3" fill="#def7be"/>:null)}</svg>;}

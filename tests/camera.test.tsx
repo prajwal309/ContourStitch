@@ -1,0 +1,9 @@
+import {describe,it,expect,vi,afterEach} from 'vitest';
+import {render,screen,waitFor,fireEvent} from '@testing-library/react';
+import {CameraView} from '@/components/camera/CameraView';
+import {assessQuality,imageQuality} from '@/lib/vision/quality';
+import {releaseCamera,cameraError} from '@/lib/camera/media';
+import type {VisionFrame} from '@/lib/vision/types';
+const blank:VisionFrame={landmarks:[],mask:null,width:300,height:500,brightness:20,sharpness:0,timestamp:0,poseCount:0};
+afterEach(()=>vi.restoreAllMocks());
+describe('camera quality',()=>{it('gates missing body, blur and low lighting',()=>{const q=assessQuality(blank,'front');expect(q.checks.every(c=>c.passed)).toBe(false);expect(q.checks.find(c=>c.key==='landmarks')?.passed).toBe(false);expect(q.checks.find(c=>c.key==='blur')?.passed).toBe(false);});it('measures flat dark input as blurry and dark',()=>{expect(imageQuality(new Uint8ClampedArray(16*16*4),16,16)).toEqual({brightness:0,sharpness:0});});it('releases every camera track',()=>{const stop=vi.fn();releaseCamera({getTracks:()=>[{stop},{stop}]} as unknown as MediaStream);expect(stop).toHaveBeenCalledTimes(2);});it('explains permission failure',async()=>{Object.defineProperty(navigator,'mediaDevices',{configurable:true,value:{getUserMedia:vi.fn().mockRejectedValue(new DOMException('Denied','NotAllowedError'))}});render(<CameraView view="front" onCapture={()=>{}} onManual={()=>{}}/>);await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('permission was denied'));expect(screen.getByRole('button',{name:'Capture front photo'})).toBeDisabled();fireEvent.click(screen.getByRole('checkbox'));expect(screen.getByRole('button',{name:'Capture front photo'})).toBeDisabled();});it('explains unsupported cameras',()=>{expect(cameraError(new Error('UNSUPPORTED'))).toContain('HTTPS');});});

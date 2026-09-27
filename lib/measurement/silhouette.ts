@@ -1,0 +1,7 @@
+import type {PersonMask} from '@/lib/vision/types';
+import {rowSpan} from '@/lib/vision/segmentation';
+import {config} from './config';
+export const median=(values:number[])=>{if(!values.length)return null;const sorted=[...values].sort((a,b)=>a-b),mid=Math.floor(sorted.length/2);return sorted.length%2?sorted[mid]:(sorted[mid-1]+sorted[mid])/2;};
+export function robustWidth(mask:PersonMask,row:number,centerX:number):number|null{const samples:number[]=[];for(let dy=-config.sampleRadius;dy<=config.sampleRadius;dy++){const span=rowSpan(mask,row+dy,centerX);if(span)samples.push(span.right-span.left+1);}return samples.length>=config.minSampleRows?median(samples):null;}
+/** A constrained front-view leg gap; no population-ratio fallback for missing crotch. */
+export function crotchRow(mask:PersonMask,hipY:number,leftLegX:number,rightLegX:number,ankleY:number):number|null{const left=Math.round(Math.min(leftLegX,rightLegX)),right=Math.round(Math.max(leftLegX,rightLegX));if(right-left<4)return null;const center=Math.round((left+right)/2),start=Math.round(hipY),end=Math.round(hipY+(ankleY-hipY)*config.crotchSearchFraction);for(let row=start;row<=end-2;row++){let valid=true;for(let dy=0;dy<3;dy++){const y=row+dy;if(y<0||y>=mask.height||mask.data[y*mask.width+center]>=config.maskThreshold||mask.data[y*mask.width+left]<config.maskThreshold||mask.data[y*mask.width+right]<config.maskThreshold)valid=false;}if(valid)return row;}return null;}
