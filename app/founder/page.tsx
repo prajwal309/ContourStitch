@@ -1,24 +1,24 @@
 import Image from 'next/image';
 
-import bodnathPortrait from './BodnathNiraula.jpeg';
+import teknathPortrait from './TeknathNiraula.jpeg';
 import prajwalPortrait from './PrajwalNiraula.png';
 import sundarPortrait from './SundarNiraula.jpg';
 
 const founders = [
   {
-    name: 'Bodnath Niraula',
+    name: 'Teknath Niraula',
     role: 'Co-Founder & CEO',
-    image: bodnathPortrait,
+    image: teknathPortrait,
     bio: [
-      `Bodnath Niraula is a serial entrepreneur whose experience building and operating businesses has given him a practical understanding of how everyday customer problems can become meaningful business opportunities. Based in Kentucky, he has pursued ventures across multiple industries, including the restaurant and hospitality sector.`,
+      `Teknath Niraula is a serial entrepreneur whose experience building and operating businesses has given him a practical understanding of how everyday customer problems can become meaningful business opportunities. Based in Kentucky, he has pursued ventures across multiple industries, including the restaurant and hospitality sector.`,
 
       `His entrepreneurial approach is grounded in identifying real-world friction, understanding customers directly, and developing simple ideas that can scale into useful products and services.`,
 
-      `The original idea behind ContourStitch began with Bodnath. He recognized a persistent problem in custom clothing: customers and tailors often depend on manual measurements, in-person fittings, and inconsistent sizing, making truly personalized clothing difficult to order remotely.`,
+      `The original idea behind ContourStitch began with Teknath. He recognized a persistent problem in custom clothing: customers and tailors often depend on manual measurements, in-person fittings, and inconsistent sizing, making truly personalized clothing difficult to order remotely.`,
 
       `His insight was straightforward: if accurate body measurements could be captured easily from photographs, custom clothing could become dramatically more accessible. That idea became the foundation for ContourStitch—a platform designed to transform ordinary photographs into useful body measurements and create a bridge between customers and custom garment makers anywhere in the world.`,
 
-      `As a co-founder, Bodnath brings the perspective of an experienced operator, combining entrepreneurial instinct, customer understanding, and the ability to recognize opportunities hidden inside familiar problems.`,
+      `As a co-founder, Teknath brings the perspective of an experienced operator, combining entrepreneurial instinct, customer understanding, and the ability to recognize opportunities hidden inside familiar problems.`,
     ],
   },
 
@@ -70,6 +70,36 @@ export default function FounderPage() {
           together entrepreneurship, science, technology, and design to build a
           more thoughtful approach to personal fit.
         </p>
+      </section>
+
+      <section className="founder-story" aria-labelledby="our-story-heading">
+        <div>
+          <p className="eyebrow">OUR BEGINNING</p>
+          <h2 id="our-story-heading">Our story</h2>
+        </div>
+        <div className="founder-story-copy">
+          <p>
+            ContourStitch began with a problem Bodnath Niraula saw in custom
+            clothing: ordering from a distance often means navigating manual
+            measurements, repeated fittings, and inconsistent sizing. He asked a
+            simple question: could photographs make that first step easier?
+          </p>
+          <p>
+            That question brought together Bodnath’s experience building
+            businesses and Prajwal and Sundar Niraula’s backgrounds in science,
+            computation, and research. Together, we are developing a way to
+            estimate body measurements from two guided photographs and a
+            person’s height, with processing kept in the browser.
+          </p>
+          <p>
+            Our goal is to make personal fit more accessible while being clear
+            about what the technology can do. Photo-based measurements are
+            estimates, with uncertainty that depends on the images and pose.
+            They need to be checked with a tape before garment production. We
+            are building toward that goal through careful testing, honest
+            feedback, and respect for people’s privacy.
+          </p>
+        </div>
       </section>
 
       {/* Founders */}
