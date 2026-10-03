@@ -79,17 +79,17 @@ export default function FounderPage() {
         </div>
         <div className="founder-story-copy">
           <p>
-            ContourStitch began with a problem Bodnath Niraula saw in custom
+            ContourStitch began with a problem Teknath Niraula saw in custom
             clothing: ordering from a distance often means navigating manual
             measurements, repeated fittings, and inconsistent sizing. He asked a
             simple question: could photographs make that first step easier?
           </p>
           <p>
-            That question brought together Bodnath’s experience building
-            businesses and Prajwal and Sundar Niraula’s backgrounds in science,
+            That question brought together Teknath's experience building
+            businesses and Prajwal and Sundar Niraula's backgrounds in science,
             computation, and research. Together, we are developing a way to
             estimate body measurements from two guided photographs and a
-            person’s height, with processing kept in the browser.
+            person's height, with processing kept in the browser.
           </p>
           <p>
             Our goal is to make personal fit more accessible while being clear
@@ -97,7 +97,7 @@ export default function FounderPage() {
             estimates, with uncertainty that depends on the images and pose.
             They need to be checked with a tape before garment production. We
             are building toward that goal through careful testing, honest
-            feedback, and respect for people’s privacy.
+            feedback, and respect for people's privacy.
           </p>
         </div>
       </section>
