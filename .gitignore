@@ -10,3 +10,9 @@ playwright-report/
 *.tsbuildinfo
 *.sh
 *.md
+!README.md
+!ml/README.md
+!IMPLEMENTATION.md
+ml/.venv/
+ml/artifacts/
+__pycache__/

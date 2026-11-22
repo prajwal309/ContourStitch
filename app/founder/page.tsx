@@ -85,11 +85,11 @@ export default function FounderPage() {
             simple question: could photographs make that first step easier?
           </p>
           <p>
-            That question brought together Teknath's experience building
-            businesses and Prajwal and Sundar Niraula's backgrounds in science,
+            That question brought together Teknath&apos;s experience building
+            businesses and Prajwal and Sundar Niraula&apos;s backgrounds in science,
             computation, and research. Together, we are developing a way to
             estimate body measurements from two guided photographs and a
-            person's height, with processing kept in the browser.
+            person&apos;s height, with processing kept in the browser.
           </p>
           <p>
             Our goal is to make personal fit more accessible while being clear
@@ -97,7 +97,7 @@ export default function FounderPage() {
             estimates, with uncertainty that depends on the images and pose.
             They need to be checked with a tape before garment production. We
             are building toward that goal through careful testing, honest
-            feedback, and respect for people's privacy.
+            feedback, and respect for people&apos;s privacy.
           </p>
         </div>
       </section>
@@ -112,7 +112,7 @@ export default function FounderPage() {
                   src={founder.image}
                   alt={`Portrait of ${founder.name}`}
                   fill
-                  sizes="(max-width: 640px) calc(100vw - 44px), (max-width: 900px) calc(100vw - 50px), (max-width: 1320px) calc((100vw - 152px) / 3), 390px"
+                  sizes="(max-width: 640px) 92vw, (max-width: 820px) 44vw, (max-width: 1320px) 30vw, 400px"
                   className="founder-photo"
                 />
               </div>

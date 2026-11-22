@@ -1,11 +1,34 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import Image from 'next/image';
-import { LockKeyhole } from 'lucide-react';
+import localFont from 'next/font/local';
 
 import { SessionProvider } from '@/components/SessionProvider';
 
 import './globals.css';
+
+const editorial = localFont({
+  src: [
+    {
+      path: './fonts/cormorant-garamond.woff2',
+      weight: '400 700',
+      style: 'normal',
+    },
+    {
+      path: './fonts/cormorant-garamond-italic.woff2',
+      weight: '400 700',
+      style: 'italic',
+    },
+  ],
+  variable: '--type-cormorant',
+  display: 'swap',
+});
+const inter = localFont({
+  src: './fonts/inter.woff2',
+  weight: '400 700',
+  variable: '--type-inter',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   icons: { icon: '/logo/logo.png', apple: '/logo/logo.png' },
@@ -20,7 +43,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html
+      lang="en"
+      data-scroll-behavior="smooth"
+      className={`${editorial.variable} ${inter.variable}`}
+    >
       <body>
         <SessionProvider>
           <a className="skip" href="#main">
@@ -43,14 +70,15 @@ export default function RootLayout({
             <nav aria-label="Main navigation">
               <Link href="/#how-it-works">How it works</Link>
 
-              <Link href="/founder">
-                Founder
-              </Link>
+              <Link href="/founder">Founder</Link>
 
-              <span className="private-label">
-                <LockKeyhole size={14} />
-                Private by design
-              </span>
+              <Link
+                href="/my-measurements"
+                className="account-nav"
+                prefetch={false}
+              >
+                My Measurements
+              </Link>
             </nav>
           </header>
 
@@ -68,13 +96,7 @@ export default function RootLayout({
               ContourStitch
             </Link>
 
-            <span>
-              Made for your shape. Designed for your privacy.
-            </span>
-
-            <span>
-              Estimates, thoughtfully made.
-            </span>
+            <span>Made for your shape. Designed for your privacy.</span>
           </footer>
         </SessionProvider>
       </body>

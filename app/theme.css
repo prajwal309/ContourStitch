@@ -1,0 +1,53 @@
+:root {
+  --paper: #f4efe7;
+  --ink: #34251f;
+  --sand: #e9dccb;
+  --copper: #ad684a;
+  --primary: #99583d;
+  --surface: #fffcf8;
+  --muted: #77685e;
+  --line: #d8cab9;
+
+  --primary-hover: #80452e;
+  --primary-active: #6d3825;
+  --ink-accent: #85472f;
+  --control-line: #9c8674;
+  --focus: #99583d;
+  --muted-on-sand: #65564b;
+  --success: #4e6044;
+  --success-surface: #edf0e7;
+  --warning: #744718;
+  --warning-surface: #f6e8d5;
+  --danger: #872f2b;
+  --danger-surface: #f7e8e2;
+  --camera-surface: #392c26;
+  --camera-badge: #34251ff2;
+  --camera-guide: #ffefe0;
+  --camera-detail: #ffc5a5;
+
+  --google-fill: #fff;
+  --google-text: #1f1f1f;
+  --google-line: #747775;
+  --facebook-blue: #1877f2;
+
+  --font-heading: var(--type-cormorant), Georgia, serif;
+  --font-body: var(--type-inter), system-ui, sans-serif;
+  --font-provider-fallback: Arial, sans-serif;
+  --text-small: 0.875rem;
+  --text-label: 0.6875rem;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --gutter: clamp(1rem, 4.5vw, 4rem);
+  --page-width: 78rem;
+  --radius-control: 0.375rem;
+  --radius-card: 0.625rem;
+  --radius-pill: 999px;
+  --shadow-card: 0 2px 4px #34251f07, 0 12px 30px #34251f09;
+  --target: 2.75rem;
+}

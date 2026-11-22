@@ -1,0 +1,33 @@
+{
+  "version": "experimental-1",
+  "featureNames": [
+    "heightCm",
+    "shoulderWidthRatio",
+    "chestFrontRatio",
+    "chestSideRatio",
+    "waistFrontRatio",
+    "waistSideRatio",
+    "hipFrontRatio",
+    "hipSideRatio",
+    "torsoLengthRatio",
+    "legLengthRatio",
+    "armLengthRatio",
+    "scanQuality"
+  ],
+  "outputNames": [
+    "chestCm",
+    "waistCm",
+    "hipCm",
+    "shoulderCm",
+    "inseamCm",
+    "sleeveCm",
+    "torsoCm",
+    "neckCm"
+  ],
+  "outputUnits": "cm",
+  "requiredCalibrationInputs": [
+    "heightCm"
+  ],
+  "trainingData": "synthetic",
+  "validated": false
+}

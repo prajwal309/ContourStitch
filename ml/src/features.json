@@ -1,0 +1,1 @@
+{"featureNames":["heightCm","shoulderWidthRatio","chestFrontRatio","chestSideRatio","waistFrontRatio","waistSideRatio","hipFrontRatio","hipSideRatio","torsoLengthRatio","legLengthRatio","armLengthRatio","scanQuality"],"outputNames":["chestCm","waistCm","hipCm","shoulderCm","inseamCm","sleeveCm","torsoCm","neckCm"]}
