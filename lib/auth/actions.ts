@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { authentication, currentUser, enabledProviders } from './auth';
 import { database } from './db';
+import { accountReturnPath } from './return-path';
 import {
   oauthIntentCookie,
   oauthIntentOptions,
@@ -13,6 +14,7 @@ import {
 export async function startOAuth(
   provider: string,
   expectedUserId: string | null,
+  nextPath?: string,
 ) {
   if (!authentication || !enabledProviders.some(({ id }) => id === provider)) {
     redirect('/sign-in?error=Configuration');
@@ -29,14 +31,14 @@ export async function startOAuth(
       select: { provider: true },
     }))
   ) {
-    redirect('/my-measurements');
+    redirect(accountReturnPath(nextPath));
   }
 
   let destination: string;
   try {
     destination = await authentication.signIn(
       provider,
-      { redirect: false, redirectTo: '/my-measurements' },
+      { redirect: false, redirectTo: accountReturnPath(nextPath) },
       provider === 'google' ? { prompt: 'select_account' } : undefined,
     );
   } catch {

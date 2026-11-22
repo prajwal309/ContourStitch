@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation';
 import { LockKeyhole } from 'lucide-react';
 import { startOAuth } from '@/lib/auth/actions';
 import { currentUser, enabledProviders } from '@/lib/auth/auth';
+import { accountReturnPath } from '@/lib/auth/return-path';
 
 const googleSans = localFont({
   src: '../fonts/google-sans.woff2',
@@ -20,7 +21,7 @@ const providerMarks: Record<string, string> = {
 
 const errorMessages: Record<string, string> = {
   OAuthAccountNotLinked:
-    'This sign-in is already associated with an account. Use your original provider, then connect another provider from My Measurements.',
+    'This sign-in is already associated with an account. Use your original provider, then connect another provider from My Account.',
   OAuthCallbackError:
     'Sign-in was cancelled or the provider could not complete it. Please try again.',
   AccessDenied: 'Sign-in was declined. Please try again when you’re ready.',
@@ -35,11 +36,12 @@ export const metadata = { title: 'Sign in | ContourStitch' };
 export default async function SignIn({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; next?: string }>;
 }) {
-  const { error } = await searchParams;
+  const { error, next } = await searchParams;
+  const returnPath = accountReturnPath(next);
   const user = await currentUser();
-  if (user && !error) redirect('/my-measurements');
+  if (user && !error) redirect(returnPath);
 
   return (
     <main id="main" className="flow">
@@ -60,12 +62,15 @@ export default async function SignIn({
         )}
         {user ? (
           <Link className="button" href="/my-measurements">
-            Return to My Measurements
+            Return to My Fit Profile
           </Link>
         ) : (
           <div className="sign-in-actions">
             {enabledProviders.map(({ id, name }) => (
-              <form action={startOAuth.bind(null, id, null)} key={id}>
+              <form
+                action={startOAuth.bind(null, id, null, returnPath)}
+                key={id}
+              >
                 <button
                   className={`provider-button provider-button--${id}`}
                   type="submit"

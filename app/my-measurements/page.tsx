@@ -2,45 +2,56 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { CloudProfileSources } from '@/components/accounts/CloudProfileSources';
 import { profileDate } from '@/lib/accounts/dates';
-import { leaveAccount, startOAuth } from '@/lib/auth/actions';
-import { currentUser, enabledProviders } from '@/lib/auth/auth';
+import { restoreProfile } from '@/lib/accounts/profile-data';
+import { currentUser } from '@/lib/auth/auth';
 import { database } from '@/lib/auth/db';
+import { products } from '@/lib/shop/catalog';
+import { compatibility } from '@/lib/shop/fit';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'My Measurements | ContourStitch' };
+export const metadata = { title: 'My Fit Profile | ContourStitch' };
 
-export default async function MyMeasurements() {
+export default async function MyFitProfile() {
   const user = await currentUser();
   if (!user) redirect('/sign-in');
 
   const db = database();
-  const [profiles, accounts] = await Promise.all([
-    db.measurementProfile.findMany({
-      where: { userId: user.id },
-      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
-      select: { id: true, createdAt: true, updatedAt: true, unit: true },
-    }),
-    db.account.findMany({
-      where: { userId: user.id },
-      select: { provider: true },
-    }),
-  ]);
+  const profiles = await db.measurementProfile.findMany({
+    where: { userId: user.id },
+    orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    select: { id: true, createdAt: true, updatedAt: true, unit: true },
+  });
+  const latest = profiles[0]
+    ? await db.measurementProfile.findUnique({
+        where: { id: profiles[0].id, userId: user.id },
+        select: {
+          unit: true,
+          estimates: true,
+          corrections: true,
+          missing: true,
+        },
+      })
+    : null;
+  const keys = latest
+    ? (restoreProfile(latest)?.report.estimates.map(({ key }) => key) ?? [])
+    : [];
 
   return (
     <main id="main" className="flow results-flow">
       <section className="flow-card">
-        <p className="eyebrow">YOUR CONTOURSTITCH ACCOUNT</p>
-        <h1>My Measurements</h1>
+        <p className="eyebrow">Measure once. Wear everywhere.</p>
+        <h1>My Fit Profile</h1>
         <p>
-          {user.name ? `Signed in as ${user.name}.` : 'You’re signed in.'} Your
-          saved fit profiles are available on any device.
+          {user.name ? `Signed in as ${user.name}. ` : ''}Your saved body
+          measurements can be reused across collections. Review them when your
+          body changes or a garment calls for more detail.
         </p>
         <CloudProfileSources key={user.id} userId={user.id} />
         <section className="account-section" aria-labelledby="saved-profiles">
           <h2 id="saved-profiles">Saved profiles</h2>
           {profiles.length ? (
             <ul className="cloud-profile-list">
-              {profiles.map(({ id, createdAt, updatedAt, unit }) => (
+              {profiles.map(({ id, createdAt, updatedAt, unit }, index) => (
                 <li key={id}>
                   <Link
                     href={`/my-measurements/${id}`}
@@ -48,13 +59,19 @@ export default async function MyMeasurements() {
                     className="cloud-profile-link"
                   >
                     <strong>
-                      Profile from{' '}
-                      <time dateTime={createdAt.toISOString()}>
-                        {profileDate(createdAt)}
-                      </time>
+                      {index === 0 ? (
+                        'Latest profile'
+                      ) : (
+                        <>
+                          Profile from{' '}
+                          <time dateTime={createdAt.toISOString()}>
+                            {profileDate(createdAt)}
+                          </time>
+                        </>
+                      )}
                     </strong>
                     <span className="muted">
-                      Updated{' '}
+                      Recorded{' '}
                       <time dateTime={updatedAt.toISOString()}>
                         {profileDate(updatedAt)}
                       </time>{' '}
@@ -73,29 +90,31 @@ export default async function MyMeasurements() {
             Start a new measurement →
           </Link>
         </section>
-        <section className="account-section" aria-labelledby="account-sign-in">
-          <h2 id="account-sign-in">Sign-in methods</h2>
-          <div className="account-actions">
-            {enabledProviders.map(({ id, name }) =>
-              accounts.some(({ provider }) => provider === id) ? (
-                <p key={id} className="muted">
-                  {name} connected
-                </p>
-              ) : (
-                <form action={startOAuth.bind(null, id, user.id)} key={id}>
-                  <button className="secondary-button" type="submit">
-                    Connect {name}
-                  </button>
-                </form>
-              ),
-            )}
-          </div>
-          <form action={leaveAccount}>
-            <button className="text-button" type="submit">
-              Sign out
-            </button>
-          </form>
-        </section>
+        {!!keys.length && (
+          <section className="account-section">
+            <h2>Use your fit when you shop</h2>
+            <p>
+              The shop offers your latest profile first. Each outfit shows which
+              recorded dimensions it can reuse.
+            </p>
+            <ul className="studio-list">
+              {products.map((product) => {
+                const match = compatibility(product.requirements, keys);
+                return (
+                  <li key={product.key}>
+                    <Link className="inline-link" href={`/shop/${product.key}`}>
+                      {product.name}
+                    </Link>
+                    <span className="muted">
+                      {match.fromProfile.length} of{' '}
+                      {product.requirements.length} recorded
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
       </section>
     </main>
   );

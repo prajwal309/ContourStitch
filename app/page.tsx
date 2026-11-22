@@ -3,53 +3,73 @@ import Link from 'next/link';
 import {
   ArrowRight,
   Camera,
-  Ruler,
+  Save,
   ScanLine,
   ShieldCheck,
-  SlidersHorizontal,
+  Users,
 } from 'lucide-react';
+import { collections, products } from '@/lib/shop/catalog';
+import { ProductGrid } from '@/components/shop/ProductGrid';
 
 const steps = [
   {
     icon: Camera,
-    title: 'Find your angle',
-    text: 'Enter your height, then take a front and side photo with our on-screen guide.',
+    title: 'Measure once',
+    text: 'Take two guided photos or enter tape measurements. Review and adjust each result.',
+  },
+  {
+    icon: Save,
+    title: 'Save your fit',
+    text: 'Save a private fit profile to your account. Update it whenever your measurements change.',
   },
   {
     icon: ScanLine,
-    title: 'See the estimate',
-    text: 'Get eight body measurements with clear ranges and confidence indicators.',
+    title: 'Shop with confidence',
+    text: 'Reuse your measurements across outfits. Add any extra dimensions a garment needs.',
   },
   {
-    icon: SlidersHorizontal,
-    title: 'Make it yours',
-    text: 'Check with a tape, adjust any measurement, and save a profile on this device.',
+    icon: Users,
+    title: 'Dress together',
+    text: 'Invite family to a shared collection and coordinate outfits for your occasion.',
   },
 ];
 
 export default function Home() {
+  const wedding = collections[0];
+
   return (
     <main id="main">
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">A more personal approach to fit</p>
+          <p className="eyebrow">Personal fit for weddings and beyond</p>
           <h1>
-            Your shape.
-            <br />
-            Your measurements.
-            <em>A better starting point.</em>
+            Measure Once.<em>Wear Everywhere.</em>
           </h1>
           <p className="hero-description">
-            Two guided photos give you a set of estimated body measurements you
-            can review, refine with a tape, and make your own.
+            Create a personal fit profile you can reuse for weddings,
+            celebrations, and future collections.
           </p>
-          <Link href="/measure" className="button">
-            Start measurement <ArrowRight size={18} aria-hidden="true" />
-          </Link>
-          <p className="micro">About 3 minutes · No account needed</p>
+          <div className="studio-actions">
+            <Link href="/measure" className="button">
+              Create My Fit Profile <ArrowRight size={18} aria-hidden="true" />
+            </Link>
+            <Link href="/shop" className="secondary-button">
+              Explore Collections
+            </Link>
+          </div>
+          <p className="micro">
+            Already measured?{' '}
+            <Link
+              className="inline-link"
+              href="/my-measurements"
+              prefetch={false}
+            >
+              Open My Fit Profile
+            </Link>
+          </p>
           <div className="hero-trust">
             <ShieldCheck size={18} aria-hidden="true" />
-            <span>Your photos stay on your device. Always.</span>
+            <span>Your photos stay on your device.</span>
           </div>
         </div>
 
@@ -64,8 +84,7 @@ export default function Home() {
             />
           </div>
           <figcaption>
-            <span>Front and side photos build your fit profile.</span>
-            <Ruler size={18} aria-hidden="true" />
+            Start with two guided photos and a tape check.
           </figcaption>
         </figure>
       </section>
@@ -76,14 +95,9 @@ export default function Home() {
         aria-labelledby="process"
       >
         <div className="section-heading">
-          <h2 id="process">A few steps closer to your fit.</h2>
-          <p>
-            No measuring expertise required. We’ll guide you from start to
-            finish.
-          </p>
+          <h2 id="process">From first measure to family fitting.</h2>
         </div>
-
-        <div className="steps-grid">
+        <div className="steps-grid journey-grid">
           {steps.map(({ icon: Icon, title, text }) => (
             <article key={title}>
               <Icon size={23} aria-hidden="true" />
@@ -94,14 +108,36 @@ export default function Home() {
         </div>
       </section>
 
+      <section
+        className="process-section"
+        aria-labelledby="featured-collection"
+      >
+        <div className="section-heading">
+          <div>
+            <p className="eyebrow">Family wedding wear · Demo collection</p>
+            <h2 id="featured-collection">{wedding.name}</h2>
+          </div>
+          <Link
+            href={`/shop/collections/${wedding.key}`}
+            className="text-button"
+          >
+            View the collection <ArrowRight size={17} aria-hidden="true" />
+          </Link>
+        </div>
+        <ProductGrid
+          products={products.filter(
+            ({ collectionKey }) => collectionKey === wedding.key,
+          )}
+        />
+      </section>
+
       <section className="honesty">
         <ShieldCheck size={24} aria-hidden="true" />
         <div>
           <h2>Check your measurements with a tape.</h2>
           <p>
-            These photo-based body estimates are a starting point for fit.
-            Always confirm them before cutting or ordering made-to-measure
-            clothing.
+            Review estimates before garment production and update your fit
+            profile as your body or garment requirements change.
           </p>
         </div>
         <Link className="text-button" href="/results">

@@ -43,7 +43,7 @@ export default function Results() {
             </Link>
             <p className="muted">
               Signing in for the first time? Save on this device first, then
-              import the saved copy from My Measurements.
+              import the saved copy from My Fit Profile.
             </p>
           </div>
         )}

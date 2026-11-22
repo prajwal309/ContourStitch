@@ -30,7 +30,7 @@ const nextConfig: NextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
         ],
       },
-      ...['/sign-in', '/my-measurements'].map((source) => ({
+      ...['/sign-in', '/my-measurements', '/account'].map((source) => ({
         source,
         headers: [
           {

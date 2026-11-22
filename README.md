@@ -33,9 +33,9 @@ https://contourstitchv1.vercel.app/api/auth/callback/facebook
 
 ## Accounts and storage
 
-The optional profile saved on a device stays in that browser, including through sign-in or sign-out. After signing in, **My Measurements** can save the current draft or explicitly import the saved browser copy. An identical set of measurement values resolves to the existing profile without overwriting it. The cloud editor retains original estimate ranges when a tape correction is added. Local and account deletion controls act on their respective copies.
+The optional profile saved on a device stays in that browser, including through sign-in or sign-out. After signing in, **My Fit Profile** can save the current draft or explicitly import the saved browser copy. An identical set of measurement values resolves to the existing profile without overwriting it. The cloud editor retains original estimate ranges when a tape correction is added. Local and account deletion controls act on their respective copies.
 
-Account ownership is checked on every profile read and write. Sign-in uses revocable PostgreSQL sessions and HTTP-only cookies, with secure cookies on HTTPS. To add a second provider, sign in with the original provider and choose **Connect** in My Measurements. Matching email addresses alone never connect accounts. Photos, video, masks, and landmarks stay in the browser. The cloud database stores only the account information and derived profile fields needed by these features.
+Account ownership is checked on every profile read and write. Sign-in uses revocable PostgreSQL sessions and HTTP-only cookies, with secure cookies on HTTPS. To add a second provider, sign in with the original provider and choose **Connect** in My Account. Matching email addresses alone never connect accounts. Photos, video, masks, and landmarks stay in the browser. The cloud database stores only the account information and derived profile fields needed by these features.
 
 ## Verification
 
@@ -62,7 +62,7 @@ CONTOURSTITCH_TEST_DATABASE_URL=postgresql://localhost/contourstitch_test npm ru
 3. Apply `npm run db:migrate` from a trusted environment with the target database’s direct URL before enabling login. Use the project’s `npm run build` command on Vercel. It generates the Prisma client and runs the Next.js webpack production build.
 4. After release, sign in with each real provider, refresh, sign out, and verify that two separate accounts can only see their own saved profiles. Confirm the local guest flow on a mobile browser.
 
-MediaPipe models and WASM assets are served from the application origin under `public/models`. The CSP allows the same-origin assets and WebAssembly. Only the sign-in and dashboard pages allow form redirects to Google and Facebook.
+MediaPipe models and WASM assets are served from the application origin under `public/models`. The CSP allows the same-origin assets and WebAssembly. The sign-in and account routes allow form redirects to Google and Facebook.
 
 ## Measurement limitations and validation
 
@@ -79,3 +79,26 @@ The shared palette, typography, spacing, and component state tokens live in `app
 The built-in ImageGen tool created `public/editorial/heritage-atelier.webp` using this prompt.
 
 > Photorealistic editorial photograph for the right-hand hero of a modern bespoke tailoring studio website. Portrait 4:5 composition. An oatmeal linen tailor’s dress form in a rich dark espresso herringbone suit jacket, three-quarter view, with a warm ivory measuring tape draped naturally over one shoulder. The jacket and handsome lapel dominate; no person. Warm plaster atelier wall, delicate side window light, subtle film grain, tactile cloth, warm browns and soft sand, quiet craftsmanship. At the bottom edge a soft suggestion of a walnut workbench. Keep the main silhouette centered to survive mobile crop. Single coherent realistic scene, clean magazine photography, no lettering, words, logos, watermarks, graphic overlays or collages.
+
+## Fit profiles and wedding previews
+
+The existing photo and tape tools remain available under **Measure**. **My Fit Profile** lists saved profiles and their recorded dates. Editing creates a private revision, and the detail page shows the available history. The fit profile migration backfills each existing profile at its current version and recorded date. Earlier edits predate the history feature.
+
+The initial Heritage Wedding Collection links adult and junior kurtas, an adult lehenga, and a junior dress through common color and fabric variants. The version-controlled catalog in `lib/shop/catalog.ts` provides stable identifiers, facets, product variants, and required measurement definitions. Keeping the demonstration catalog in code lets guests browse without PostgreSQL and gives future collections a straightforward way to add new requirements.
+
+When a signed-in shopper opens an outfit, the shop offers the most recently recorded profile. Compatibility checks whether the necessary recorded body dimensions exist. Additional body measurements and preferred garment lengths are entered separately in centimetres. Fit preferences are saved as notes. Review estimates with a tape before production and after changes in body dimensions.
+
+**Family Fit Studio** stores groups, organizer and membership records, and outfit selections in PostgreSQL. Invite links are single-use, expire after seven days, and can be revoked before redemption. The database stores SHA-256 digests of invitation tokens. An organizer can see group names, member display names, outfit choices and fit progress. Body measurements, extra dimensions and fit preferences are visible only to the member who supplied them.
+
+The preview supports one saved outfit per signed-in member in each family group and one personal saved outfit per product. A selection references the exact private fit revision used when it was saved. Updating a profile creates a new revision while existing selections keep their original one. Deleting a fit profile removes its revisions and makes dependent selection progress pending. Future orders can use a separate, explicitly authorized immutable snapshot with appropriate retention rules.
+
+Catalog photography, fabrics and outfit choices are illustrative. Real inventory, pricing, checkout, payment, orders and fulfillment are future phases. Apply both Prisma migrations before enabling the updated account and family routes. The database-backed Playwright run also checks group authorization, revoked and used links, and reuse of one fit profile across products.
+
+### Demonstration photography
+
+Built-in ImageGen created the four illustrations in `public/collections`. Each was generated with the following prompt.
+
+- `adult-kurta.webp` — Photorealistic bespoke South Asian wedding clothing product photograph for ContourStitch’s demo catalog. Vertical 4:5 framing, entire outfit visible on a headless linen tailor’s form, soft warm stone plaster background, a little walnut floor, natural soft light, authentic woven fabric texture and understated finishing. No people, text, watermark, props, or other outfits. Warm cream, soft sand and copper, timeless high-end tailoring editorial. An adult long ivory textured kurta with modest aged-copper embroidered mandarin neckline, long sleeves and matching straight trousers.
+- `adult-lehenga.webp` — Photorealistic bespoke South Asian wedding clothing product photograph for ContourStitch’s demo catalog. Vertical 4:5 framing, entire outfit visible on a headless linen tailor’s form, soft warm stone plaster background, a little walnut floor, natural soft light, authentic woven fabric texture and understated finishing. No people, text, watermark, props, or other outfits. Warm cream, soft sand and copper, timeless high-end tailoring editorial. An adult burnished copper lehenga with a floor-length skirt, half-sleeve matching blouse and a cream dupatta draped naturally on the form.
+- `child-kurta.webp` — Photorealistic bespoke South Asian wedding clothing product photograph for ContourStitch’s demo catalog. Vertical 4:5 framing, entire outfit visible on a headless linen tailor’s form, soft warm stone plaster background, a little walnut floor, natural soft light, authentic woven fabric texture and understated finishing. No people, text, watermark, props, or other outfits. Warm cream, soft sand and copper, timeless high-end tailoring editorial. A child-size ivory kurta with copper piping around a narrow band collar and ivory trousers, on a small child-size garment display form.
+- `child-dress.webp` — Photorealistic bespoke South Asian wedding clothing product photograph for ContourStitch’s demo catalog. Vertical 4:5 framing, entire outfit visible on a headless linen tailor’s form, soft warm stone plaster background, a little walnut floor, natural soft light, authentic woven fabric texture and understated finishing. No people, text, watermark, props, or other outfits. Warm cream, soft sand and copper, timeless high-end tailoring editorial. A child-size copper occasion dress, subtle woven fabric, gathered tea-length skirt, cap sleeves and warm ivory sash, on a small garment display form.

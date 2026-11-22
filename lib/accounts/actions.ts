@@ -25,19 +25,23 @@ export async function createCloudProfile(
   const data = prepareProfile(input);
   if (!data) return invalidError;
 
-  const profiles = database().measurementProfile;
+  const db = database();
   try {
-    const [profile] = await profiles.createManyAndReturn({
-      data: { ...data, userId: user.id },
-      skipDuplicates: true,
-      select: { id: true },
+    const profile = await db.$transaction(async (tx) => {
+      const [saved] = await tx.measurementProfile.createManyAndReturn({
+        data: { ...data, userId: user.id },
+        skipDuplicates: true,
+        select: { id: true, version: true, updatedAt: true },
+      });
+      if (saved) await recordRevision(tx, saved, data);
+      return saved;
     });
     if (profile) {
       revalidatePath('/my-measurements');
       return { ok: true, id: profile.id, duplicate: false } as const;
     }
 
-    const existing = await profiles.findUnique({
+    const existing = await db.measurementProfile.findUnique({
       where: {
         userId_fingerprint: { userId: user.id, fingerprint: data.fingerprint },
       },
@@ -65,13 +69,18 @@ export async function updateCloudProfile(
   if (!validRevision(id, version)) return invalidError;
 
   try {
-    const saved = await database().measurementProfile.update({
-      where: { id, userId: user.id, version },
-      data: { ...data, version: { increment: 1 } },
-      select: { version: true, updatedAt: true },
+    const saved = await database().$transaction(async (tx) => {
+      const updated = await tx.measurementProfile.update({
+        where: { id, userId: user.id, version },
+        data: { ...data, version: { increment: 1 } },
+        select: { id: true, version: true, updatedAt: true },
+      });
+      await recordRevision(tx, updated, data);
+      return updated;
     });
 
     revalidatePath('/my-measurements');
+    revalidatePath(`/my-measurements/${id}`);
     return {
       ok: true,
       version: saved.version,
@@ -117,4 +126,27 @@ function validRevision(id: string, version: number) {
     version > 0 &&
     version < 2_147_483_647
   );
+}
+
+async function recordRevision(
+  tx: Prisma.TransactionClient,
+  profile: { id: string; version: number; updatedAt: Date },
+  {
+    unit,
+    estimates,
+    corrections,
+    missing,
+  }: NonNullable<ReturnType<typeof prepareProfile>>,
+) {
+  await tx.measurementRevision.create({
+    data: {
+      profileId: profile.id,
+      version: profile.version,
+      recordedAt: profile.updatedAt,
+      unit,
+      estimates,
+      corrections,
+      missing,
+    },
+  });
 }

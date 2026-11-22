@@ -32,9 +32,9 @@ const inter = localFont({
 
 export const metadata: Metadata = {
   icons: { icon: '/logo/logo.png', apple: '/logo/logo.png' },
-  title: 'ContourStitch — A better starting point for fit',
+  title: 'ContourStitch — Measure Once. Wear Everywhere.',
   description:
-    'Private, guided body measurement estimates from two photographs. Review, correct and save on your device.',
+    'Create a reusable fit profile from guided photos or tape measurements and explore coordinated family wedding wear.',
 };
 
 export default function RootLayout({
@@ -68,16 +68,20 @@ export default function RootLayout({
             </Link>
 
             <nav aria-label="Main navigation">
-              <Link href="/#how-it-works">How it works</Link>
-
-              <Link href="/founder">Founder</Link>
-
+              <Link href="/shop">Shop</Link>
+              <Link href="/measure">Measure</Link>
               <Link
                 href="/my-measurements"
                 className="account-nav"
                 prefetch={false}
               >
-                My Measurements
+                My Fit Profile
+              </Link>
+              <Link href="/family-fit" prefetch={false}>
+                Family Fit Studio
+              </Link>
+              <Link href="/account" prefetch={false}>
+                My Account
               </Link>
             </nav>
           </header>
@@ -96,6 +100,10 @@ export default function RootLayout({
               ContourStitch
             </Link>
 
+            <nav className="footer-links" aria-label="About ContourStitch">
+              <Link href="/#how-it-works">How it works</Link>
+              <Link href="/founder">Founder</Link>
+            </nav>
             <span>Made for your shape. Designed for your privacy.</span>
           </footer>
         </SessionProvider>
