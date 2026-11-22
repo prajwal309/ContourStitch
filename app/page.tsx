@@ -8,14 +8,13 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
-import { collections, products } from '@/lib/shop/catalog';
-import { ProductGrid } from '@/components/shop/ProductGrid';
+import { brand } from '@/lib/brand';
 
 const steps = [
   {
     icon: Camera,
-    title: 'Measure once',
-    text: 'Take two guided photos or enter tape measurements. Review and adjust each result.',
+    title: 'Find your fit',
+    text: 'Follow a guided video scan or enter tape measurements. Review and adjust each result.',
   },
   {
     icon: Save,
@@ -24,37 +23,28 @@ const steps = [
   },
   {
     icon: ScanLine,
-    title: 'Shop with confidence',
-    text: 'Reuse your measurements across outfits. Add any extra dimensions a garment needs.',
+    title: 'Reuse your measurements',
+    text: 'Bring your saved measurements to your next fitting or use them to compare size guides.',
   },
   {
     icon: Users,
-    title: 'Dress together',
-    text: 'Invite family to a shared collection and coordinate outfits for your occasion.',
+    title: 'Plan a family fitting',
+    text: 'Invite family to a private group for your next occasion.',
   },
 ];
 
 export default function Home() {
-  const wedding = collections[0];
-
   return (
     <main id="main">
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">Personal fit for weddings and beyond</p>
           <h1>
-            Measure Once.<em>Wear Everywhere.</em>
+            {brand.name} <em>{brand.tagline}</em>
           </h1>
-          <p className="hero-description">
-            Create a personal fit profile you can reuse for weddings,
-            celebrations, and future collections.
-          </p>
+          <p className="hero-description">{brand.description}</p>
           <div className="studio-actions">
             <Link href="/measure" className="button">
               Create My Fit Profile <ArrowRight size={18} aria-hidden="true" />
-            </Link>
-            <Link href="/shop" className="secondary-button">
-              Explore Collections
             </Link>
           </div>
           <p className="micro">
@@ -69,7 +59,7 @@ export default function Home() {
           </p>
           <div className="hero-trust">
             <ShieldCheck size={18} aria-hidden="true" />
-            <span>Your photos stay on your device.</span>
+            <span>Your camera video stays on your device.</span>
           </div>
         </div>
 
@@ -83,9 +73,7 @@ export default function Home() {
               preload
             />
           </div>
-          <figcaption>
-            Start with two guided photos and a tape check.
-          </figcaption>
+          <figcaption>Start with guided video and a tape check.</figcaption>
         </figure>
       </section>
 
@@ -106,29 +94,6 @@ export default function Home() {
             </article>
           ))}
         </div>
-      </section>
-
-      <section
-        className="process-section"
-        aria-labelledby="featured-collection"
-      >
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Family wedding wear · Demo collection</p>
-            <h2 id="featured-collection">{wedding.name}</h2>
-          </div>
-          <Link
-            href={`/shop/collections/${wedding.key}`}
-            className="text-button"
-          >
-            View the collection <ArrowRight size={17} aria-hidden="true" />
-          </Link>
-        </div>
-        <ProductGrid
-          products={products.filter(
-            ({ collectionKey }) => collectionKey === wedding.key,
-          )}
-        />
       </section>
 
       <section className="honesty">

@@ -85,6 +85,21 @@ test('OAuth linking, private cloud profiles, and expired sessions', async ({
     await page.goto('/results');
     await enterWaist(page, 82, 'Enter');
     await page.getByRole('button', { name: 'Save on this device' }).click();
+    await page.evaluate(() => {
+      const key = 'contourstitch.profile.v1';
+      const profile = JSON.parse(localStorage.getItem(key)!);
+      profile.report.source = 'live-video';
+      profile.report.estimates.push({
+        key: 'arm',
+        valueCm: 54,
+        uncertaintyCm: null,
+        confidence: 'low',
+        method: 'Experimental video arm estimate',
+        warnings: [],
+        sidesCm: { left: 53, right: 55 },
+      });
+      localStorage.setItem(key, JSON.stringify(profile));
+    });
     await page.getByRole('link', { name: 'My Fit Profile' }).click();
     await completeOAuth(
       page,
@@ -122,6 +137,7 @@ test('OAuth linking, private cloud profiles, and expired sessions', async ({
     ).toBeVisible();
     await page.waitForURL('**/my-measurements/*');
     const profileUrl = page.url();
+    await expect(page.getByText('Left 53 cm · Right 55 cm')).toBeVisible();
     await enterWaist(page, 84, 'Edit');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(
@@ -238,7 +254,7 @@ test('OAuth linking, private cloud profiles, and expired sessions', async ({
   }
 });
 
-test('a family reuses private fit revisions across preview outfits', async ({
+test('family invitations and saved outfit privacy still work while the shop is paused', async ({
   page,
   browser,
   baseURL,
@@ -344,16 +360,36 @@ test('a family reuses private fit revisions across preview outfits', async ({
     await expect(
       member.getByText('Measurements saved to your account.'),
     ).toBeVisible();
-    await member.goto(`/shop/heritage-kurta?group=${groupId}`);
+    const wearer = await db.user.findUniqueOrThrow({
+      where: { email: `${run}-member@example.test` },
+    });
+    const profile = await db.measurementProfile.findFirstOrThrow({
+      where: { userId: wearer.id },
+    });
+    const revision = await db.measurementRevision.findFirstOrThrow({
+      where: { profileId: profile.id, version: 1 },
+    });
+    const selection = await db.outfitSelection.create({
+      data: {
+        userId: wearer.id,
+        groupId,
+        scopeKey: `group:${groupId}`,
+        productKey: 'heritage-kurta',
+        variantKey: 'copper-linen',
+        fitRevisionId: revision.id,
+        extraCm: { kurtaLength: 116.8 },
+        preference: '',
+        fitComplete: true,
+        usesProfile: true,
+      },
+    });
+    await member.goto(groupUrl);
     await expect(
-      member.getByText(/4 of 5 dimensions from your saved profile/),
+      member.getByRole('heading', { name: 'Your membership' }),
     ).toBeVisible();
-    await member.getByLabel('Preferred kurta length (cm)').fill('116.8');
-    await member.getByLabel('Color and fabric').selectOption('copper-linen');
-    await member.getByRole('button', { name: 'Save my outfit' }).click();
-    await expect(
-      member.getByText('Outfit saved.', { exact: true }),
-    ).toBeVisible();
+    await expect(member.getByText(/Heritage Kurta|saved outfit/i)).toHaveCount(
+      0,
+    );
     expect(
       await member.evaluate(
         () => document.documentElement.scrollWidth <= innerWidth,
@@ -362,24 +398,26 @@ test('a family reuses private fit revisions across preview outfits', async ({
 
     await page.goto(groupUrl);
     await expect(
-      page.getByText(
-        /Heritage Kurta · Copper · Soft linen blend · Fit details entered/,
-      ),
+      page.getByRole('heading', { name: 'Group members' }),
     ).toBeVisible();
+    await expect(
+      page.getByText(/Heritage Kurta|selected an outfit/i),
+    ).toHaveCount(0);
     await expect(page.getByText(/104\.37|116\.8/)).toHaveCount(0);
     expect(await page.content()).not.toContain('116.8');
 
-    const wearer = await db.user.findUniqueOrThrow({
-      where: { email: `${run}-member@example.test` },
-    });
-    const profile = await db.measurementProfile.findFirstOrThrow({
-      where: { userId: wearer.id },
-    });
-    const first = await db.outfitSelection.findFirstOrThrow({
-      where: { userId: wearer.id, groupId },
-      include: { fitRevision: true },
-    });
-    expect(first.fitRevision?.version).toBe(1);
+    await member.goto('/account');
+    await expect(member.getByText(/Heritage Kurta|saved outfits/i)).toHaveCount(
+      0,
+    );
+    await member.getByLabel('Display name').fill('Wedding guest');
+    await member.getByRole('button', { name: 'Save display name' }).click();
+    await expect(member.getByText('Display name saved.')).toBeVisible();
+    await page.goto(groupUrl);
+    await expect(
+      page.getByText('Wedding guest', { exact: true }),
+    ).toBeVisible();
+
     await page.goto(`/my-measurements/${profile.id}`);
     await expect(page.getByText('This page could not be found.')).toBeVisible();
 
@@ -390,31 +428,15 @@ test('a family reuses private fit revisions across preview outfits', async ({
       member.getByText('Changes saved to your account.'),
     ).toBeVisible();
     const unchanged = await db.outfitSelection.findUniqueOrThrow({
-      where: { id: first.id },
+      where: { id: selection.id },
       include: { fitRevision: true },
     });
     expect(unchanged.fitRevision?.corrections).toMatchObject({ waist: 83 });
 
-    await member.goto('/shop/heritage-lehenga');
-    await expect(
-      member.getByText(/2 of 4 dimensions from your saved profile/),
-    ).toBeVisible();
-    await expect(member.getByLabel('Bust circumference (cm)')).toBeVisible();
-    await expect(
-      member.getByLabel('Preferred skirt length (cm)'),
-    ).toBeVisible();
-    await member.getByRole('button', { name: 'Save my outfit' }).click();
-    await expect(
-      member.getByText('Outfit saved.', { exact: true }),
-    ).toBeVisible();
-    const second = await db.outfitSelection.findFirstOrThrow({
-      where: { userId: wearer.id, groupId: null },
-      include: { fitRevision: true },
+    const latest = await db.measurementRevision.findFirstOrThrow({
+      where: { profileId: profile.id, version: 2 },
     });
-    expect(second.fitRevision).toMatchObject({
-      profileId: profile.id,
-      version: 2,
-    });
+    expect(latest.corrections).toMatchObject({ waist: 88 });
 
     const stranger = await strangerContext.newPage();
     await stranger.goto('/sign-in');

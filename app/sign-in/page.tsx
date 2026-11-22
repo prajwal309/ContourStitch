@@ -50,7 +50,7 @@ export default async function SignIn({
         <h1>Sign in</h1>
         <p>
           Save your fit profiles and open them on any device. Only measurements
-          you choose to save to your account are uploaded. Your photos stay in
+          you choose to save to your account are uploaded. Camera video stays in
           your browser.
         </p>
         {error && (

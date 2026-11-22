@@ -1,7 +1,7 @@
 import Image from 'next/image';
 
 import teknathPortrait from './TeknathNiraula.jpeg';
-import prajwalPortrait from './PrajwalNiraula.png';
+import prajwalPortrait from './PrajwalNiraula-portrait.webp';
 import sundarPortrait from './SundarNiraula.jpg';
 
 const founders = [
@@ -26,6 +26,7 @@ const founders = [
     name: 'Prajwal Niraula',
     role: 'Co-Founder & AI / Algorithms Lead',
     image: prajwalPortrait,
+    imagePosition: 'right center',
     bio: [
       `Prajwal Niraula is a scientist and entrepreneur with a PhD in planetary science from MIT. His work has centered on solving difficult problems at the intersection of physics, computation, and data—an approach he now brings to building products.`,
 
@@ -86,14 +87,14 @@ export default function FounderPage() {
           </p>
           <p>
             That question brought together Teknath&apos;s experience building
-            businesses and Prajwal and Sundar Niraula&apos;s backgrounds in science,
-            computation, and research. Together, we are developing a way to
-            estimate body measurements from two guided photographs and a
+            businesses and Prajwal and Sundar Niraula&apos;s backgrounds in
+            science, computation, and research. Together, we are developing a
+            way to estimate body measurements from guided video and a
             person&apos;s height, with processing kept in the browser.
           </p>
           <p>
             Our goal is to make personal fit more accessible while being clear
-            about what the technology can do. Photo-based measurements are
+            about what the technology can do. Video-derived measurements are
             estimates, with uncertainty that depends on the images and pose.
             They need to be checked with a tape before garment production. We
             are building toward that goal through careful testing, honest
@@ -114,6 +115,7 @@ export default function FounderPage() {
                   fill
                   sizes="(max-width: 640px) 92vw, (max-width: 820px) 44vw, (max-width: 1320px) 30vw, 400px"
                   className="founder-photo"
+                  style={{ objectPosition: founder.imagePosition }}
                 />
               </div>
 

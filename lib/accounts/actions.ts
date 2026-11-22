@@ -150,3 +150,35 @@ async function recordRevision(
     },
   });
 }
+
+export async function updateDisplayName(
+  expectedUserId: string,
+  _: { error?: string; saved?: boolean },
+  form: FormData,
+): Promise<{ error?: string; saved?: boolean }> {
+  const user = await authorized(expectedUserId);
+  if (!user)
+    return { error: 'Your session changed. Sign in again to continue.' };
+
+  const value = form.get('displayName');
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (
+    name.length < 2 ||
+    name.length > 80 ||
+    Array.from(name).some(
+      (character) =>
+        character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
+    )
+  ) {
+    return { error: 'Enter a display name of 2 to 80 characters.' };
+  }
+
+  try {
+    await database().user.update({ where: { id: user.id }, data: { name } });
+    revalidatePath('/account');
+    revalidatePath('/family-fit/[id]', 'page');
+    return { saved: true };
+  } catch {
+    return { error: 'Your display name could not be saved.' };
+  }
+}

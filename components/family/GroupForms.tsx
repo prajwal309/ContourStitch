@@ -33,16 +33,7 @@ export function CreateGroupForm({ userId }: { userId: string }) {
             required
           />
         </label>
-        <label>
-          Shared collection
-          <select name="collection">
-            {collections.map(({ key, name }) => (
-              <option key={key} value={key}>
-                {name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <input type="hidden" name="collection" value={collections[0].key} />
         <button type="submit" className="button">
           {pending ? 'Creating…' : 'Create group'}
         </button>

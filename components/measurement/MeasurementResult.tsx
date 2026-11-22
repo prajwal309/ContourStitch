@@ -4,6 +4,7 @@ import { Pencil, ShieldCheck, Save, Trash2 } from 'lucide-react';
 import {
   labels,
   measurementKeys,
+  liveMeasurementKeys,
   type MeasurementKey,
   type MeasurementReport,
   type Unit,
@@ -30,6 +31,11 @@ export function MeasurementResult({
   const [notice, setNotice] = useState('');
   const [storageError, setStorageError] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const keys =
+    report.source === 'live-video' ? liveMeasurementKeys : measurementKeys;
+  const estimateCount = keys.filter((key) =>
+    report.estimates.some((estimate) => estimate.key === key),
+  ).length;
 
   function changeUnit(next: Unit) {
     setEditing(null);
@@ -63,14 +69,16 @@ export function MeasurementResult({
         <div>
           <strong>Body measurements, with room for uncertainty.</strong>
           <p>
-            These ranges are heuristic allowances, not validated confidence
-            intervals. Confirm every estimate with a tape before garment
-            production. No garment ease is included.
+            Video estimates are experimental. Where a range is shown, it is a
+            working allowance. Confirm every estimate with a tape before garment
+            production. Garment ease is separate.
           </p>
         </div>
       </div>
       <div className="results-toolbar">
-        <span>{report.estimates.length} of 8 measurements</span>
+        <span>
+          {estimateCount} of {keys.length} measurements
+        </span>
         <div className="unit-toggle" aria-label="Measurement units">
           <button aria-pressed={unit === 'cm'} onClick={() => changeUnit('cm')}>
             cm
@@ -85,7 +93,7 @@ export function MeasurementResult({
         enter or correct it.
       </p>
       <div className="measurements">
-        {measurementKeys.map((key) => {
+        {keys.map((key) => {
           const estimate = report.estimates.find((e) => e.key === key);
           const manual = estimate?.method === tapeMethod;
           const original = report.originalEstimates?.find((e) => e.key === key);
@@ -118,14 +126,25 @@ export function MeasurementResult({
                       <div className="measurement-value">
                         {displayValue(estimate.valueCm, unit)}{' '}
                         <span>
-                          ± {range(estimate.uncertaintyCm, unit)} {unit}
+                          {estimate.uncertaintyCm === null
+                            ? unit
+                            : `± ${range(estimate.uncertaintyCm, unit)} ${unit}`}
                         </span>
                         <span className={`confidence ${estimate.confidence}`}>
                           {manual
                             ? 'Tape entry'
-                            : `${estimate.confidence} confidence`}
+                            : estimate.uncertaintyCm === null
+                              ? 'Experimental'
+                              : `${estimate.confidence} confidence`}
                         </span>
                       </div>
+                      {estimate.sidesCm && (
+                        <p className="muted">
+                          Left {displayValue(estimate.sidesCm.left, unit)}{' '}
+                          {unit} · Right{' '}
+                          {displayValue(estimate.sidesCm.right, unit)} {unit}
+                        </p>
+                      )}
                       {estimate.confidence === 'low' && (
                         <p className="tape-warning">
                           Confirm {labels[key].toLowerCase()} with a tape.
@@ -137,9 +156,10 @@ export function MeasurementResult({
                         {original && (
                           <p>
                             Original estimate{' '}
-                            {displayValue(original.valueCm, unit)} {unit} with a
-                            range of ± {range(original.uncertaintyCm, unit)}{' '}
-                            {unit} ({original.confidence} confidence).
+                            {displayValue(original.valueCm, unit)} {unit}
+                            {original.uncertaintyCm === null
+                              ? ' (experimental).'
+                              : ` with a range of ± ${range(original.uncertaintyCm, unit)} ${unit} (${original.confidence} confidence).`}
                           </p>
                         )}
                         <ul>
@@ -174,7 +194,7 @@ export function MeasurementResult({
                 storage(() => {
                   saveProfile(report, unit);
                   setNotice(
-                    'Measurements saved on this device. No photos were saved.',
+                    'Measurements saved on this device. Camera images weren’t saved.',
                   );
                 })
               }
@@ -199,7 +219,7 @@ export function MeasurementResult({
             </button>
             <p className="muted">
               Shared device? Skip saving. Your profile is stored only in this
-              browser, without photos.
+              browser, without camera images.
             </p>
             {confirmDelete ? (
               <div className="delete-confirm">
@@ -207,7 +227,11 @@ export function MeasurementResult({
                 <button
                   className="secondary-button"
                   onClick={() => {
-                    onChange({ estimates: [], missing: {} });
+                    onChange({
+                      ...(report.source && { source: report.source }),
+                      estimates: [],
+                      missing: {},
+                    });
                     setEditing(null);
                     setConfirmDelete(false);
                     storage(() => {

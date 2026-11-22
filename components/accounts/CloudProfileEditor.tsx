@@ -4,6 +4,8 @@ import { useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { MeasurementResult } from '@/components/measurement/MeasurementResult';
+import { useSession } from '@/components/SessionProvider';
+import { mergeMeasurements } from '@/lib/measurement/corrections';
 import { deleteCloudProfile, updateCloudProfile } from '@/lib/accounts/actions';
 import { profileDate } from '@/lib/accounts/dates';
 import type { LocalProfile } from '@/lib/storage/profile';
@@ -30,6 +32,7 @@ export function CloudProfileEditor({
   updatedAt: string;
 }) {
   const [report, setReport] = useState(profile.report);
+  const { report: scanDraft } = useSession();
   const [unit, setUnit] = useState(profile.unit);
   const [saved, setSaved] = useState({
     report: profile.report,
@@ -85,6 +88,20 @@ export function CloudProfileEditor({
           {profileDate(new Date(saved.updatedAt))}
         </time>
       </p>
+      {scanDraft?.source === 'live-video' && !!scanDraft.estimates.length && (
+        <button
+          type="button"
+          className="secondary-button"
+          onClick={() => {
+            setReport((current) => mergeMeasurements(current, scanDraft));
+            setNotice(
+              'Scan measurements added to this draft. Review and choose Save changes to update this profile.',
+            );
+          }}
+        >
+          Apply current scan to this profile
+        </button>
+      )}
       <MeasurementResult
         report={report}
         initialUnit={unit}

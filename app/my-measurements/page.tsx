@@ -2,11 +2,9 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { CloudProfileSources } from '@/components/accounts/CloudProfileSources';
 import { profileDate } from '@/lib/accounts/dates';
-import { restoreProfile } from '@/lib/accounts/profile-data';
 import { currentUser } from '@/lib/auth/auth';
 import { database } from '@/lib/auth/db';
-import { products } from '@/lib/shop/catalog';
-import { compatibility } from '@/lib/shop/fit';
+import { brand } from '@/lib/brand';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My Fit Profile | ContourStitch' };
@@ -21,30 +19,15 @@ export default async function MyFitProfile() {
     orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
     select: { id: true, createdAt: true, updatedAt: true, unit: true },
   });
-  const latest = profiles[0]
-    ? await db.measurementProfile.findUnique({
-        where: { id: profiles[0].id, userId: user.id },
-        select: {
-          unit: true,
-          estimates: true,
-          corrections: true,
-          missing: true,
-        },
-      })
-    : null;
-  const keys = latest
-    ? (restoreProfile(latest)?.report.estimates.map(({ key }) => key) ?? [])
-    : [];
-
   return (
     <main id="main" className="flow results-flow">
       <section className="flow-card">
-        <p className="eyebrow">Measure once. Wear everywhere.</p>
+        <p className="muted">{brand.tagline}</p>
         <h1>My Fit Profile</h1>
         <p>
-          {user.name ? `Signed in as ${user.name}. ` : ''}Your saved body
-          measurements can be reused across collections. Review them when your
-          body changes or a garment calls for more detail.
+          {user.name ? `Signed in as ${user.name}. ` : ''}Reuse your saved body
+          measurements for future fittings. Review them when your body changes
+          or a garment calls for more detail.
         </p>
         <CloudProfileSources key={user.id} userId={user.id} />
         <section className="account-section" aria-labelledby="saved-profiles">
@@ -90,31 +73,6 @@ export default async function MyFitProfile() {
             Start a new measurement →
           </Link>
         </section>
-        {!!keys.length && (
-          <section className="account-section">
-            <h2>Use your fit when you shop</h2>
-            <p>
-              The shop offers your latest profile first. Each outfit shows which
-              recorded dimensions it can reuse.
-            </p>
-            <ul className="studio-list">
-              {products.map((product) => {
-                const match = compatibility(product.requirements, keys);
-                return (
-                  <li key={product.key}>
-                    <Link className="inline-link" href={`/shop/${product.key}`}>
-                      {product.name}
-                    </Link>
-                    <span className="muted">
-                      {match.fromProfile.length} of{' '}
-                      {product.requirements.length} recorded
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </section>
-        )}
       </section>
     </main>
   );

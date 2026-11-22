@@ -4,6 +4,7 @@ import Image from 'next/image';
 import localFont from 'next/font/local';
 
 import { SessionProvider } from '@/components/SessionProvider';
+import { brand } from '@/lib/brand';
 
 import './globals.css';
 
@@ -30,11 +31,33 @@ const inter = localFont({
   display: 'swap',
 });
 
+const title = `${brand.name} — ${brand.tagline}`;
+const socialImage = {
+  url: '/editorial/contourstitch-social.jpg',
+  width: 1200,
+  height: 630,
+  alt: `${brand.name}. ${brand.tagline}`,
+};
+
 export const metadata: Metadata = {
+  metadataBase: new URL('https://contourstitchv1.vercel.app'),
+  applicationName: brand.name,
   icons: { icon: '/logo/logo.png', apple: '/logo/logo.png' },
-  title: 'ContourStitch — Measure Once. Wear Everywhere.',
-  description:
-    'Create a reusable fit profile from guided photos or tape measurements and explore coordinated family wedding wear.',
+  title,
+  description: brand.description,
+  openGraph: {
+    type: 'website',
+    siteName: brand.name,
+    title,
+    description: brand.description,
+    images: [socialImage],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title,
+    description: brand.description,
+    images: [socialImage],
+  },
 };
 
 export default function RootLayout({
@@ -59,16 +82,15 @@ export default function RootLayout({
               <Image
                 src="/logo/logo.png"
                 alt=""
-                width={48}
-                height={48}
+                width={72}
+                height={72}
                 className="brand-logo"
               />
-              ContourStitch
+              {brand.name}
               <span className="beta">BETA</span>
             </Link>
 
             <nav aria-label="Main navigation">
-              <Link href="/shop">Shop</Link>
               <Link href="/measure">Measure</Link>
               <Link
                 href="/my-measurements"
@@ -97,14 +119,14 @@ export default function RootLayout({
                 height={36}
                 className="brand-logo"
               />
-              ContourStitch
+              {brand.name}
             </Link>
 
             <nav className="footer-links" aria-label="About ContourStitch">
               <Link href="/#how-it-works">How it works</Link>
               <Link href="/founder">Founder</Link>
             </nav>
-            <span>Made for your shape. Designed for your privacy.</span>
+            <span>{brand.tagline}</span>
           </footer>
         </SessionProvider>
       </body>

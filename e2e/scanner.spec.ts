@@ -73,7 +73,7 @@ for (const debug of [false, true])
           };
         };
     });
-    await page.goto(debug ? '/measure/video?debug=1' : '/measure/video');
+    await page.goto(debug ? '/measure/experimental?debug=1' : '/measure/experimental');
     await page.getByRole('checkbox').check();
     await page.getByRole('button', { name: 'Start measurement' }).click();
     await page.getByRole('button', { name: 'Continue to video scan' }).click();
@@ -115,7 +115,7 @@ test('permission denial offers restart and closes cleanly', async ({
       },
     }),
   );
-  await page.goto('/measure/video');
+  await page.goto('/measure/experimental');
   await page.getByRole('checkbox').check();
   await page.getByRole('button', { name: 'Start measurement' }).click();
   await page.getByRole('button', { name: 'Continue to video scan' }).click();

@@ -79,5 +79,6 @@ describe('outfit fit requirements', () => {
       '/my-measurements',
     );
     expect(accountReturnPath('/shop/../account')).toBe('/my-measurements');
+    expect(accountReturnPath('/shop/heritage-kurta')).toBe('/my-measurements');
   });
 });

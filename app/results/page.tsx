@@ -18,10 +18,10 @@ export default function Results() {
         </h1>
         {!report && (
           <p>
-            No current photo estimates. Enter tape measurements below, load a
+            No current scan estimates. Enter tape measurements below, load a
             saved profile, or{' '}
             <Link href="/measure" className="inline-link">
-              start a guided capture
+              start a guided video scan
             </Link>
             .
           </p>
@@ -43,7 +43,8 @@ export default function Results() {
             </Link>
             <p className="muted">
               Signing in for the first time? Save on this device first, then
-              import the saved copy from My Fit Profile.
+              import the saved copy from My Fit Profile. To update an existing
+              profile, open it and apply your current scan.
             </p>
           </div>
         )}

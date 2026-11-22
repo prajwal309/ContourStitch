@@ -1,0 +1,79 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
+import { LiveMeasurementCamera } from '@/components/live-measurement/LiveMeasurementCamera';
+
+afterEach(() => vi.restoreAllMocks());
+
+it('offers retry and tape entry after camera denial', async () => {
+  const engineFactory = vi.fn();
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: {
+      getUserMedia: vi
+        .fn()
+        .mockRejectedValue(new DOMException('Denied', 'NotAllowedError')),
+    },
+  });
+  render(
+    <LiveMeasurementCamera
+      heightCm={175}
+      useReference={false}
+      engineFactory={engineFactory}
+      onReview={() => {}}
+    />,
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'permission was denied',
+  );
+  expect(
+    screen.getByRole('button', { name: 'Try camera again' }),
+  ).toBeVisible();
+  expect(
+    screen.getByRole('button', { name: 'Enter tape measurements instead' }),
+  ).toBeVisible();
+  expect(engineFactory).not.toHaveBeenCalled();
+});
+
+it('reports a missing camera and can stop while requesting the stream', async () => {
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: {
+      getUserMedia: vi
+        .fn()
+        .mockRejectedValue(new DOMException('Missing', 'NotFoundError')),
+    },
+  });
+  const rendered = render(
+    <LiveMeasurementCamera
+      heightCm={175}
+      useReference={false}
+      onReview={() => {}}
+    />,
+  );
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    'No camera was found',
+  );
+  rendered.unmount();
+
+  let deliver: (stream: MediaStream) => void = () => {};
+  Object.defineProperty(navigator, 'mediaDevices', {
+    configurable: true,
+    value: {
+      getUserMedia: () =>
+        new Promise<MediaStream>((resolve) => {
+          deliver = resolve;
+        }),
+    },
+  });
+  const stop = vi.fn();
+  const pending = render(
+    <LiveMeasurementCamera
+      heightCm={175}
+      useReference={false}
+      onReview={() => {}}
+    />,
+  );
+  pending.unmount();
+  deliver({ getTracks: () => [{ stop }] } as unknown as MediaStream);
+  await waitFor(() => expect(stop).toHaveBeenCalledOnce());
+});

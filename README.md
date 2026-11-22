@@ -1,6 +1,6 @@
 # ContourStitch
 
-ContourStitch estimates eight body measurements from guided front and side photos using an entered height for scale. It runs pose detection, segmentation, and measurement calculations in the browser. Users can review the estimated ranges, enter tape corrections, and save on their device or to an optional account.
+ContourStitch uses a guided live video session to estimate six body measurements on-device. Users can review the estimates, enter tape corrections, and save a reusable fit profile in their browser or account.
 
 ## Local development
 
@@ -66,11 +66,23 @@ MediaPipe models and WASM assets are served from the application origin under `p
 
 ## Measurement limitations and validation
 
-Test camera capture on current Safari/iOS and Chrome/Android. The app offers a local photo picker and tape entry where camera access is unavailable. Model inference and supported file formats depend on the browser and device.
+The guided scan uses MediaPipe pose landmarks and person masks on-device. It collects repeatable evidence through front, arms-extended, side, back, and relaxed neck poses. Stable frontal and side silhouette samples provide ellipse inputs for circumferences. Rear evidence can corroborate torso widths and arm paths. Arm length uses shoulder-joint to wrist distance. Sleeve length follows the elbow using the shoulder landmark as a proxy for the starting point. Neck estimates require clear silhouettes from the relaxed front and side and often need tape entry.
 
-The two-view method approximates torso cross-sections as ellipses. Clothing, lighting, framing, pose, camera perspective, and an inaccurate height can all affect the estimates. Uncertainty ranges are heuristic, and inseam is particularly sensitive to occlusion. Confirm measurements with a tape before garment production.
+The live panel updates from a rolling window of valid frames while the wearer holds a pose. If the hold is interrupted, the provisional readings clear. Review uses only evidence from completed holds. [MediaPipe Pose Landmarker for the web](https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker?tab=Web)
 
-Run `node scripts/validate-measurements.mjs /path/to/de-identified-records.json` to compare paired predictions and reference tape measurements. The script reports per-measurement bias, MAE, RMSE, and 95th percentile absolute error. Use representative samples before making accuracy claims.
+Height calibration is approximate. The optional reference step uses an upright rigid object of known length in the same plane as the wearer. Align the two markers to the ends of the object in the temporary frame. Keep the camera level and at the same distance throughout. Disagreement with entered height is a reason to retry the reference or continue with height calibration.
+
+Loose clothing, hair, occlusion, lighting, motion, posture, camera perspective and incorrect scale can affect results. Capture checks and left/right differences describe the evidence the app saw. The video estimates have no calibrated uncertainty intervals. The interface withholds values when the necessary evidence is missing or inconsistent. Verify every estimate with a tape before garment production. The existing PostgreSQL JSON profile format stores the added arm and neck keys, arm sides, methods, and tape corrections. The scan can be applied to an existing profile as a draft before saving a new revision.
+
+Test the camera flow on current Safari/iOS and Chrome/Android. Spoken guidance requires a local English system voice. The on-screen instructions and tape entry are available independently of voice or camera support.
+
+### Tape comparison workflow
+
+Collect prospective validation scans with consent. Include a representative range of body shapes, clothing conditions, devices, and camera angles. Have a trained measurer take independent tape readings with consistent landmarks and repeat readings to check tape repeatability. Record scan failures and dimensions withheld, and keep participants out of calibration sets used to tune thresholds. Exclude names, photos, video, and landmarks from the validation file.
+
+Supply a JSON array with `anonymousId`, `predictedCm`, and `referenceCm`. Use the keys `arm`, `chest`, `sleeve`, `neck`, `waist`, and `hip`; omit any unsupported prediction and keep its tape reference. Optional `conditions` fields `device`, `clothing`, and `cameraAngle` can contain coarse labels. Run `node scripts/validate-measurements.mjs records.json` for bias, MAE, RMSE, 95th percentile absolute error, and coverage. Add one of `--by=device`, `--by=clothing`, or `--by=cameraAngle` to compare conditions. Use the error and coverage together before making accuracy claims.
+
+The estimator interface can accept a depth- or mesh-based method. Learned RGB shape models such as SHAPY are candidates for comparison, especially across clothing conditions. Methods that fit a body model from depth scans, such as MeasureXpert, would require different capture inputs. Evaluate either approach on held-out ContourStitch scans before using it for fit recommendations. The previous rotation and ONNX prototype is available for development at `/measure/experimental`. [SHAPY paper](https://openaccess.thecvf.com/content/CVPR2022/html/Choutas_Accurate_3D_Body_Shape_Regression_Using_Metric_and_Semantic_Attributes_CVPR_2022_paper.html) · [MeasureXpert paper](https://openaccess.thecvf.com/content/ICCV2025/html/Zhao_MeasureXpert_Automatic_Anthropometric_Measurement_Extraction_from_Two_Unregistered_Partial_Posed_ICCV_2025_paper.html)
 
 ## Heritage Tailor theme
 
@@ -80,23 +92,23 @@ The built-in ImageGen tool created `public/editorial/heritage-atelier.webp` usin
 
 > Photorealistic editorial photograph for the right-hand hero of a modern bespoke tailoring studio website. Portrait 4:5 composition. An oatmeal linen tailor’s dress form in a rich dark espresso herringbone suit jacket, three-quarter view, with a warm ivory measuring tape draped naturally over one shoulder. The jacket and handsome lapel dominate; no person. Warm plaster atelier wall, delicate side window light, subtle film grain, tactile cloth, warm browns and soft sand, quiet craftsmanship. At the bottom edge a soft suggestion of a walnut workbench. Keep the main silhouette centered to survive mobile crop. Single coherent realistic scene, clean magazine photography, no lettering, words, logos, watermarks, graphic overlays or collages.
 
-## Fit profiles and wedding previews
+## Fit profiles and family fittings
 
-The existing photo and tape tools remain available under **Measure**. **My Fit Profile** lists saved profiles and their recorded dates. Editing creates a private revision, and the detail page shows the available history. The fit profile migration backfills each existing profile at its current version and recorded date. Earlier edits predate the history feature.
+The guided video scan and tape entry are available under **Measure**. **My Account** manages the display name shown to group organizers and sign-in methods. **My Fit Profile** lists saved profiles and their recorded dates. Editing creates a private revision, and the detail page shows the available history. The fit profile migration backfills each existing profile at its current version and recorded date. Earlier edits predate the history feature.
 
-The initial Heritage Wedding Collection links adult and junior kurtas, an adult lehenga, and a junior dress through common color and fabric variants. The version-controlled catalog in `lib/shop/catalog.ts` provides stable identifiers, facets, product variants, and required measurement definitions. Keeping the demonstration catalog in code lets guests browse without PostgreSQL and gives future collections a straightforward way to add new requirements.
+The Shop, including the Heritage Wedding Collection and product pages, is paused. The page source and demo artwork are stored in the private Next.js folder `app/_paused-shop`. The catalog remains in `lib/shop/catalog.ts` and existing outfit selections remain in the database.
 
-When a signed-in shopper opens an outfit, the shop offers the most recently recorded profile. Compatibility checks whether the necessary recorded body dimensions exist. Additional body measurements and preferred garment lengths are entered separately in centimetres. Fit preferences are saved as notes. Review estimates with a tape before production and after changes in body dimensions.
+Review estimates with a tape before production and after changes in body dimensions.
 
-**Family Fit Studio** stores groups, organizer and membership records, and outfit selections in PostgreSQL. Invite links are single-use, expire after seven days, and can be revoked before redemption. The database stores SHA-256 digests of invitation tokens. An organizer can see group names, member display names, outfit choices and fit progress. Body measurements, extra dimensions and fit preferences are visible only to the member who supplied them.
+**Family Fit Studio** stores groups, organizer and membership records, and outfit selections in PostgreSQL. Invite links are single-use, expire after seven days, and can be revoked before redemption. The database stores SHA-256 digests of invitation tokens. An organizer can see group names and member display names. Body measurements, extra dimensions and fit preferences are visible only to the member who supplied them.
 
-The preview supports one saved outfit per signed-in member in each family group and one personal saved outfit per product. A selection references the exact private fit revision used when it was saved. Updating a profile creates a new revision while existing selections keep their original one. Deleting a fit profile removes its revisions and makes dependent selection progress pending. Future orders can use a separate, explicitly authorized immutable snapshot with appropriate retention rules.
+Each existing selection references the exact private fit revision used when it was saved. Updating a profile creates a new revision while existing selections keep their original one. Deleting a fit profile removes its revisions and makes dependent selection progress pending.
 
-Catalog photography, fabrics and outfit choices are illustrative. Real inventory, pricing, checkout, payment, orders and fulfillment are future phases. Apply both Prisma migrations before enabling the updated account and family routes. The database-backed Playwright run also checks group authorization, revoked and used links, and reuse of one fit profile across products.
+Catalog photography, fabrics and outfit choices are illustrative. Apply both Prisma migrations before enabling the account and family routes. The database-backed Playwright run checks group authorization, revoked and used links, and privacy of the fit revisions linked to existing outfits.
 
 ### Demonstration photography
 
-Built-in ImageGen created the four illustrations in `public/collections`. Each was generated with the following prompt.
+Built-in ImageGen created the four illustrations now stored in `app/_paused-shop/collections-art`. The parked catalog expects the artwork under `public/collections` when restored. Each was generated with the following prompt.
 
 - `adult-kurta.webp` — Photorealistic bespoke South Asian wedding clothing product photograph for ContourStitch’s demo catalog. Vertical 4:5 framing, entire outfit visible on a headless linen tailor’s form, soft warm stone plaster background, a little walnut floor, natural soft light, authentic woven fabric texture and understated finishing. No people, text, watermark, props, or other outfits. Warm cream, soft sand and copper, timeless high-end tailoring editorial. An adult long ivory textured kurta with modest aged-copper embroidered mandarin neckline, long sleeves and matching straight trousers.
 - `adult-lehenga.webp` — Photorealistic bespoke South Asian wedding clothing product photograph for ContourStitch’s demo catalog. Vertical 4:5 framing, entire outfit visible on a headless linen tailor’s form, soft warm stone plaster background, a little walnut floor, natural soft light, authentic woven fabric texture and understated finishing. No people, text, watermark, props, or other outfits. Warm cream, soft sand and copper, timeless high-end tailoring editorial. An adult burnished copper lehenga with a floor-length skirt, half-sleeve matching blouse and a cream dupatta draped naturally on the form.

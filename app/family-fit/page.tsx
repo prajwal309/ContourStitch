@@ -3,7 +3,6 @@ import { CreateGroupForm } from '@/components/family/GroupForms';
 import { currentUser } from '@/lib/auth/auth';
 import { database } from '@/lib/auth/db';
 import { signInFor } from '@/lib/auth/return-path';
-import { getCollection } from '@/lib/shop/catalog';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Family Fit Studio | ContourStitch' };
@@ -20,7 +19,6 @@ export default async function FamilyFit() {
               id: true,
               name: true,
               organizerId: true,
-              collectionKey: true,
             },
           },
         },
@@ -33,8 +31,7 @@ export default async function FamilyFit() {
         <p className="eyebrow">Weddings and celebrations</p>
         <h1>Family Fit Studio</h1>
         <p>
-          Bring everyone into one collection. Share an invitation, choose
-          coordinated outfits, and track who has entered their fit details.
+          Create a private group and invite family members to your next fitting.
         </p>
       </header>
       {user ? (
@@ -52,8 +49,7 @@ export default async function FamilyFit() {
                     >
                       <strong>{group.name}</strong>
                       <span className="muted">
-                        {group.organizerId === user.id ? 'Organizer' : 'Member'}{' '}
-                        · {getCollection(group.collectionKey)?.name}
+                        {group.organizerId === user.id ? 'Organizer' : 'Member'}
                       </span>
                     </Link>
                   </li>
@@ -75,10 +71,10 @@ export default async function FamilyFit() {
         </div>
       ) : (
         <div className="studio-panel">
-          <h2>Plan the outfits together</h2>
+          <h2>Plan a family fitting</h2>
           <p>
-            Sign in to create a private group. Each member chooses an outfit and
-            controls their own fit profile.
+            Sign in to create a private group. Each member controls their own
+            fit profile.
           </p>
           <Link href={signInFor('/family-fit')} className="button">
             Sign in to get started

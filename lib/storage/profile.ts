@@ -14,6 +14,12 @@ export type LocalProfile = {
   report: MeasurementReport;
 };
 
+const validCm = (value: unknown): value is number =>
+  typeof value === 'number' &&
+  Number.isFinite(value) &&
+  value > 0 &&
+  value <= 300;
+
 function sanitizeEstimates(input: unknown): MeasurementEstimate[] | null {
   if (!Array.isArray(input) || input.length > measurementKeys.length)
     return null;
@@ -24,12 +30,11 @@ function sanitizeEstimates(input: unknown): MeasurementEstimate[] | null {
       !item ||
       !measurementKeys.includes(item.key) ||
       estimates.some((estimate) => estimate.key === item.key) ||
-      !Number.isFinite(item.valueCm) ||
-      item.valueCm <= 0 ||
-      item.valueCm > 300 ||
-      !Number.isFinite(item.uncertaintyCm) ||
-      item.uncertaintyCm < 0 ||
-      item.uncertaintyCm > 300 ||
+      !validCm(item.valueCm) ||
+      (item.uncertaintyCm !== null &&
+        (!Number.isFinite(item.uncertaintyCm) ||
+          item.uncertaintyCm < 0 ||
+          item.uncertaintyCm > 300)) ||
       !['low', 'medium', 'high'].includes(item.confidence) ||
       typeof item.method !== 'string' ||
       item.method.length > 500 ||
@@ -41,7 +46,15 @@ function sanitizeEstimates(input: unknown): MeasurementEstimate[] | null {
     )
       return null;
 
+    const sides = item.sidesCm;
+    if (
+      sides !== undefined &&
+      (!sides || !validCm(sides.left) || !validCm(sides.right))
+    )
+      return null;
+
     estimates.push({
+      ...(sides && { sidesCm: { left: sides.left, right: sides.right } }),
       key: item.key,
       valueCm: item.valueCm,
       uncertaintyCm: item.uncertaintyCm,
@@ -95,6 +108,9 @@ export function sanitizeProfile(input: unknown): LocalProfile | null {
     version: 1,
     unit: value.unit,
     report: {
+      ...(value.report.source === 'live-video' && {
+        source: 'live-video' as const,
+      }),
       estimates,
       missing,
       ...(originalEstimates.length && { originalEstimates }),

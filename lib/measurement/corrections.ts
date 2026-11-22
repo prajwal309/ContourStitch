@@ -36,9 +36,33 @@ export function correctMeasurement(
   delete missing[key];
 
   return {
+    ...report,
     estimates: [
       ...report.estimates.filter((estimate) => estimate.key !== key),
       tapeEstimate(key, valueCm),
+    ],
+    missing,
+    ...(originalEstimates.length && { originalEstimates }),
+  };
+}
+
+/** Apply only measurements that were actually recorded in the new draft. */
+export function mergeMeasurements(
+  saved: MeasurementReport,
+  draft: MeasurementReport,
+): MeasurementReport {
+  const replaced = new Set(draft.estimates.map(({ key }) => key));
+  const originalEstimates = [
+    ...(saved.originalEstimates ?? []).filter(({ key }) => !replaced.has(key)),
+    ...(draft.originalEstimates ?? []),
+  ];
+  const missing = { ...saved.missing };
+  for (const key of replaced) delete missing[key];
+
+  return {
+    estimates: [
+      ...saved.estimates.filter(({ key }) => !replaced.has(key)),
+      ...draft.estimates,
     ],
     missing,
     ...(originalEstimates.length && { originalEstimates }),

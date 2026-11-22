@@ -4,9 +4,7 @@ import { currentUser, enabledProviders } from '@/lib/auth/auth';
 import { startOAuth, leaveAccount } from '@/lib/auth/actions';
 import { signInFor } from '@/lib/auth/return-path';
 import { database } from '@/lib/auth/db';
-import { getProduct } from '@/lib/shop/catalog';
-import { fitProgress } from '@/lib/shop/fit';
-import { RemoveOutfit } from '@/components/shop/RemoveOutfit';
+import { DisplayNameForm } from '@/components/accounts/DisplayNameForm';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My Account | ContourStitch' };
@@ -15,27 +13,10 @@ export default async function AccountPage() {
   const user = await currentUser();
   if (!user) redirect(signInFor('/account'));
 
-  const db = database();
-  const [accounts, selections] = await Promise.all([
-    db.account.findMany({
-      where: { userId: user.id },
-      select: { provider: true },
-    }),
-    db.outfitSelection.findMany({
-      where: { userId: user.id },
-      orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        groupId: true,
-        productKey: true,
-        variantKey: true,
-        fitComplete: true,
-        usesProfile: true,
-        fitRevisionId: true,
-        group: { select: { name: true } },
-      },
-    }),
-  ]);
+  const accounts = await database().account.findMany({
+    where: { userId: user.id },
+    select: { provider: true },
+  });
 
   return (
     <main id="main" className="market-page">
@@ -56,47 +37,7 @@ export default async function AccountPage() {
       </header>
       <div className="studio-columns">
         <section className="studio-panel">
-          <h2>Saved outfits</h2>
-          <p>
-            Return to your saved outfit previews and update their fit details.
-          </p>
-          {selections.length ? (
-            <ul className="studio-list">
-              {selections.map((selection) => {
-                const product = getProduct(selection.productKey);
-                const variant = product?.variants.find(
-                  ({ key }) => key === selection.variantKey,
-                );
-                return (
-                  <li key={selection.id}>
-                    <div>
-                      {product ? (
-                        <Link
-                          className="inline-link"
-                          href={`/shop/${product.key}${selection.groupId ? `?group=${selection.groupId}` : ''}`}
-                        >
-                          {product.name}
-                        </Link>
-                      ) : (
-                        <strong>Saved outfit</strong>
-                      )}
-                      <p className="muted">
-                        {selection.group?.name ?? 'Personal selection'}
-                        {variant &&
-                          ` · ${variant.color} · ${variant.fabric}`} ·{' '}
-                        {fitProgress(selection)}
-                      </p>
-                    </div>
-                    <RemoveOutfit userId={user.id} id={selection.id} />
-                  </li>
-                );
-              })}
-            </ul>
-          ) : (
-            <Link className="text-button" href="/shop">
-              Explore the collection →
-            </Link>
-          )}
+          <DisplayNameForm userId={user.id} initialName={user.name ?? ''} />
         </section>
         <section className="studio-panel">
           <h2>Sign-in methods</h2>

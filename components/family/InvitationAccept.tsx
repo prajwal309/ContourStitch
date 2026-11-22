@@ -67,8 +67,8 @@ export function InvitationAccept({ userId }: { userId: string | null }) {
   return (
     <>
       <p>
-        Join the group to choose an outfit from its shared collection. Your fit
-        profile and body measurements stay private.
+        Join the group to plan a family fitting. Your fit profile and body
+        measurements stay private.
       </p>
       {userId ? (
         <button

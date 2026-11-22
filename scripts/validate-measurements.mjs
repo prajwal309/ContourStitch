@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
-const records = JSON.parse(await readFile(process.argv[2], 'utf8'));
-const keys = [
+
+const fields = [
   'height',
   'shoulder',
   'chest',
@@ -9,26 +9,73 @@ const keys = [
   'sleeve',
   'inseam',
   'outseam',
+  'arm',
+  'neck',
 ];
-const result = {};
-for (const key of keys) {
-  const errors = records.flatMap((r) =>
-    Number.isFinite(r.predictedCm?.[key]) &&
-    Number.isFinite(r.referenceCm?.[key])
-      ? [r.predictedCm[key] - r.referenceCm[key]]
-      : [],
+const strata = ['device', 'clothing', 'cameraAngle'];
+const [file, option] = process.argv.slice(2);
+const group = option?.startsWith('--by=') ? option.slice(5) : '';
+
+if (!file || (option && !strata.includes(group))) {
+  process.stderr.write(
+    'Usage: node scripts/validate-measurements.mjs FILE [--by=device|clothing|cameraAngle]\n',
   );
-  if (!errors.length) continue;
-  const absolute = errors.map(Math.abs).sort((a, b) => a - b);
-  const mean = (values) =>
-    values.reduce((sum, v) => sum + v, 0) / values.length;
-  result[key] = {
-    count: errors.length,
-    bias: mean(errors),
-    mae: mean(absolute),
-    rmse: Math.sqrt(mean(errors.map((v) => v * v))),
-    p95AbsoluteError: absolute[Math.ceil(0.95 * absolute.length) - 1],
-  };
+  process.exit(1);
 }
-// Aggregate output only. No anonymous IDs or individual measurements are logged.
-console.log(JSON.stringify(result, null, 2));
+
+const records = JSON.parse(await readFile(file, 'utf8'));
+if (!Array.isArray(records))
+  throw new Error('Expected an array of de-identified records.');
+
+function metrics(rows) {
+  const result = {};
+  const mean = (values) =>
+    values.reduce((sum, value) => sum + value, 0) / values.length;
+
+  for (const key of fields) {
+    const eligibility = rows.filter((row) =>
+      Number.isFinite(row?.referenceCm?.[key]),
+    );
+    if (!eligibility.length) continue;
+
+    const errors = eligibility.flatMap((row) =>
+      Number.isFinite(row.predictedCm?.[key])
+        ? [row.predictedCm[key] - row.referenceCm[key]]
+        : [],
+    );
+    const absolute = errors.map(Math.abs).sort((a, b) => a - b);
+    result[key] = {
+      count: errors.length,
+      referenceCount: eligibility.length,
+      coverage: errors.length / eligibility.length,
+      bias: errors.length ? mean(errors) : null,
+      mae: errors.length ? mean(absolute) : null,
+      rmse: errors.length
+        ? Math.sqrt(mean(errors.map((value) => value ** 2)))
+        : null,
+      p95AbsoluteError: errors.length
+        ? absolute[Math.ceil(0.95 * absolute.length) - 1]
+        : null,
+    };
+  }
+  return result;
+}
+
+const overall = metrics(records);
+const output = group ? { overall } : overall;
+if (group) {
+  const groups = Map.groupBy(
+    records,
+    (row) => row?.conditions?.[group] ?? 'unspecified',
+  );
+  for (const label of groups.keys()) {
+    if (typeof label !== 'string' || !/^[a-z0-9 -]{1,40}$/i.test(label)) {
+      throw new Error('Condition labels must be short, coarse descriptions.');
+    }
+  }
+  output[group] = Object.fromEntries(
+    [...groups].map(([label, rows]) => [label, metrics(rows)]),
+  );
+}
+// Aggregate output only.
+console.log(JSON.stringify(output, null, 2));
