@@ -1,6 +1,6 @@
 import Image from 'next/image';
 
-import teknathPortrait from './TeknathNiraula.jpeg';
+import teknathPortrait from '../../TeknathNiraula.jpeg';
 import prajwalPortrait from './PrajwalNiraula-portrait.webp';
 import sundarPortrait from './SundarNiraula.jpg';
 

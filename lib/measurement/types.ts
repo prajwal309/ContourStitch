@@ -14,6 +14,7 @@ export const measurementKeys = [
   'neck',
 ] as const;
 export const liveMeasurementKeys = [
+  'shoulder',
   'arm',
   'chest',
   'sleeve',

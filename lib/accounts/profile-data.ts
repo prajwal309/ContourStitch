@@ -14,6 +14,7 @@ export function prepareProfile(input: unknown) {
 
   const { report, unit } = profile;
   const estimates: MeasurementEstimate[] = [];
+  const observations: MeasurementEstimate[] = [];
   const corrections: Partial<Record<MeasurementKey, number>> = {};
   const values: Partial<Record<MeasurementKey, number>> = {};
 
@@ -21,6 +22,11 @@ export function prepareProfile(input: unknown) {
     const current = report.estimates.find((estimate) => estimate.key === key);
     if (!current) continue;
     values[key] = current.valueCm;
+    observations.push(
+      current.method === tapeMethod
+        ? tapeEstimate(key, current.valueCm)
+        : current,
+    );
 
     if (current.method === tapeMethod) {
       corrections[key] = current.valueCm;
@@ -39,7 +45,14 @@ export function prepareProfile(input: unknown) {
   const fingerprint = createHash('sha256')
     .update(JSON.stringify(values))
     .digest('hex');
-  return { estimates, corrections, missing: report.missing, unit, fingerprint };
+  return {
+    estimates,
+    observations,
+    corrections,
+    missing: report.missing,
+    unit,
+    fingerprint,
+  };
 }
 
 export function restoreProfile({

@@ -24,6 +24,7 @@ const errorMessages: Record<string, string> = {
     'This sign-in is already associated with an account. Use your original provider, then connect another provider from My Account.',
   OAuthCallbackError:
     'Sign-in was cancelled or the provider could not complete it. Please try again.',
+  OAuthSignin: 'Could not connect to the sign-in provider. Please try again.',
   AccessDenied: 'Sign-in was declined. Please try again when you’re ready.',
   OAuthSession:
     'This sign-in request expired or your session changed. Please start again.',

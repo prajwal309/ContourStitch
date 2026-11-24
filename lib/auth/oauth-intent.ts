@@ -1,10 +1,10 @@
 import 'server-only';
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { authConfiguration } from './configuration';
 
 export const oauthIntentLifetime = 15 * 60;
-const secure =
-  process.env.AUTH_URL?.toLowerCase().startsWith('https://') ?? false;
+const { secure } = authConfiguration;
 export const oauthIntentCookie = secure
   ? '__Host-contourstitch-oauth'
   : 'contourstitch-oauth';

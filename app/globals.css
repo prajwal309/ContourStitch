@@ -1504,11 +1504,17 @@ progress {
 .live-estimates dl > div {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
   gap: var(--space-1) var(--space-2);
   border-top: 1px solid var(--line);
   padding-block: var(--space-2);
 }
 .live-estimates dt {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  grid-column: 1 / -1;
   font-weight: 650;
 }
 .live-estimates dd {
@@ -1518,6 +1524,41 @@ progress {
 .live-estimates dd.muted,
 .live-estimates dd.tape-warning {
   grid-column: 1 / -1;
+}
+.live-estimate-state {
+  color: var(--muted);
+  font-size: var(--text-small);
+  font-weight: 500;
+  text-align: right;
+}
+.live-measurement-value {
+  font-size: clamp(1.5rem, 3vw, 2rem);
+  font-weight: 700;
+}
+.live-uncertainty {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-small);
+}
+.uncertainty-indicator {
+  width: 1.25rem;
+  height: 0.65rem;
+  border: 1px dashed currentColor;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    135deg,
+    transparent 0,
+    transparent 3px,
+    currentColor 3px,
+    currentColor 4px
+  );
+  opacity: 0.6;
+}
+.live-progress-detail,
+.live-confidence {
+  font-size: var(--text-small);
 }
 .reference-preview {
   position: relative;

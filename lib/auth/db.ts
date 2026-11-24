@@ -2,14 +2,11 @@ import 'server-only';
 
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { databaseUrl } from './configuration';
 
 const globalDatabase = globalThis as typeof globalThis & {
   contourStitchPrisma?: PrismaClient;
 };
-
-export function databaseUrl() {
-  return process.env.DATABASE_URL_POOLED || process.env.DATABASE_URL;
-}
 
 export function database() {
   const connectionString = databaseUrl();

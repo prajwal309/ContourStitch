@@ -22,7 +22,12 @@ export default async function Profile({
 
   const saved = await database().measurementProfile.findFirst({
     where: { id, userId: user.id },
-    include: { revisions: { orderBy: { version: 'desc' } } },
+    include: {
+      revisions: {
+        orderBy: { version: 'desc' },
+        include: { measurements: { orderBy: { key: 'asc' } } },
+      },
+    },
   });
   if (!saved) notFound();
 
@@ -49,31 +54,63 @@ export default async function Profile({
         )}
         <section className="account-section">
           <h2>Measurement history</h2>
-          <p>Your past revisions show what you had recorded on each date.</p>
-          {saved.revisions.map((revision) => {
-            const recorded = restoreProfile(revision);
-            if (!recorded) return null;
-            return (
-              <details className="revision-detail" key={revision.id}>
-                <summary>
-                  <time dateTime={revision.recordedAt.toISOString()}>
-                    {profileDate(revision.recordedAt)}
-                  </time>
-                  {revision.version === saved.version && ' · Current'}
-                </summary>
-                <dl className="measurement-requirements">
-                  {recorded.report.estimates.map(({ key, valueCm }) => (
-                    <div key={key}>
-                      <dt>{labels[key]}</dt>
-                      <dd>
-                        {displayValue(valueCm, recorded.unit)} {recorded.unit}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              </details>
-            );
-          })}
+          <p>
+            Each saved revision is a confirmed measurement session. Older
+            sessions show how each recorded value differs from the latest.
+          </p>
+          {saved.revisions.length > 0 &&
+            (() => {
+              const latest = saved.revisions[0];
+              const latestValues = new Map(
+                latest.measurements.map(({ key, valueCm }) => [key, valueCm]),
+              );
+              return saved.revisions.map((revision) => (
+                <details className="revision-detail" key={revision.id}>
+                  <summary>
+                    <time dateTime={revision.recordedAt.toISOString()}>
+                      {profileDate(revision.recordedAt)}
+                    </time>
+                    {revision.version === saved.version && ' · Current'}
+                  </summary>
+                  <dl className="measurement-requirements">
+                    {revision.measurements.map((measurement) => {
+                      const latestValue = latestValues.get(measurement.key);
+                      const difference =
+                        revision.id !== latest.id && latestValue !== undefined
+                          ? measurement.valueCm - latestValue
+                          : null;
+                      const comparisonUnit = latest?.unit ?? revision.unit;
+                      return (
+                        <div key={measurement.key}>
+                          <dt>{labels[measurement.key]}</dt>
+                          <dd>
+                            {displayValue(measurement.valueCm, revision.unit)}{' '}
+                            {revision.unit}
+                          </dd>
+                          <dd className="muted">
+                            {measurement.uncertaintyCm === null
+                              ? 'No validated uncertainty interval'
+                              : `± ${displayValue(measurement.uncertaintyCm, revision.unit)} ${revision.unit}`}{' '}
+                            · Model confidence: {measurement.confidence}
+                          </dd>
+                          {difference !== null && (
+                            <dd className="muted">
+                              Change from latest: {difference > 0 ? '+' : ''}
+                              {displayValue(
+                                Math.abs(difference),
+                                comparisonUnit,
+                              )}{' '}
+                              {comparisonUnit}
+                            </dd>
+                          )}
+                          <dd className="muted">{measurement.method}</dd>
+                        </div>
+                      );
+                    })}
+                  </dl>
+                </details>
+              ));
+            })()}
         </section>
       </section>
     </main>

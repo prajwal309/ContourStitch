@@ -21,6 +21,7 @@ export type Sample = {
   scale: number;
   widths: Partial<Record<Dimension, number>>;
   arms?: Sides;
+  shoulder?: number;
 };
 type Views = Partial<Record<Pose, readonly Sample[]>>;
 
@@ -178,6 +179,14 @@ function sample(
   if (pose === 'front' || pose === 'back' || pose === 'extended') {
     evidence.arms = limbs(frame, cmPerPixel, pose === 'extended');
   }
+  if (pose === 'front') {
+    const shoulders = landmarkPath(
+      [frame.landmarks[11], frame.landmarks[12]],
+      frame.width,
+      frame.height,
+    );
+    if (shoulders !== null) evidence.shoulder = shoulders * cmPerPixel;
+  }
   if (pose === 'extended') return evidence;
   const torso = torsoAnchors(frame);
   if (!torso) return evidence;
@@ -282,6 +291,13 @@ function report(views: Views, calibration: Calibration): MeasurementReport {
 
   const arm = armAndSleeve('extended');
   const sleeve = armAndSleeve('front');
+  const shoulder = stable(views.front, (s) => s.shoulder);
+  add(
+    'shoulder',
+    shoulder,
+    'Front-view shoulder-joint distance, a proxy for shoulder breadth',
+    'Needs a clear front view, visible shoulder landmarks, and scale calibration. Verify the shoulder-breadth convention with a tape.',
+  );
   add(
     'arm',
     arm ? (arm.left + arm.right) / 2 : null,

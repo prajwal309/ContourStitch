@@ -1,12 +1,12 @@
 import type { Quality } from '@/lib/vision/types';
-import type { MeasurementEstimate } from './types';
+import type { MeasurementEstimate, MeasurementKey } from './types';
 import { config } from './config';
 export function uncertainty(
-  key: keyof typeof config.baseUncertainty,
+  key: MeasurementKey,
   qualities: Quality[],
   scaleDifference = 0,
 ): Pick<MeasurementEstimate, 'confidence' | 'warnings'> & {
-  uncertaintyCm: number;
+  uncertaintyCm: null;
 } {
   const warnings: string[] = [];
   let penalty = scaleDifference * config.scalePenalty;
@@ -33,8 +33,11 @@ export function uncertainty(
   warnings.push(
     'Unvalidated estimate: confirm this measurement with a tape before garment production.',
   );
+  warnings.push(
+    'Model confidence describes capture quality, not a calibrated physical uncertainty range.',
+  );
   return {
-    uncertaintyCm: Math.ceil(config.baseUncertainty[key] * (1 + penalty)),
+    uncertaintyCm: null,
     confidence: key === 'inseam' || penalty > 0.5 ? 'low' : 'medium',
     warnings: [...new Set(warnings)],
   };

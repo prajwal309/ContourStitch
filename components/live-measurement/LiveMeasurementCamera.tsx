@@ -13,14 +13,18 @@ import {
   facing as frameFacing,
   frameFraming,
   poses,
-  type Pose,
 } from '@/lib/live-measurement/guidance';
 import { GuidedScan } from '@/lib/live-measurement/session';
 import {
   labels,
   liveMeasurementKeys,
+  type MeasurementKey,
   type MeasurementReport,
 } from '@/lib/measurement/types';
+import {
+  measurementProgress,
+  type LiveMeasurementKey,
+} from '@/lib/live-measurement/progress';
 import { createScannerVisionEngine } from '@/lib/scanner/vision';
 import type { VisionEngine, VisionFrame } from '@/lib/vision/types';
 
@@ -34,26 +38,6 @@ type Props = {
 type Facing = 'environment' | 'user';
 type Preview = Pick<VisionFrame, 'height' | 'width' | 'landmarks'>;
 type Frozen = { width: number; height: number; bodyPixels: number };
-type LiveKey = (typeof liveMeasurementKeys)[number];
-const poseMeasurements: Record<Pose, readonly LiveKey[]> = {
-  front: ['sleeve'],
-  extended: ['arm'],
-  side: ['chest', 'waist', 'hip'],
-  back: ['sleeve', 'chest', 'waist', 'hip'],
-  neck: ['neck'],
-};
-
-function requestHint(key: LiveKey, index: number) {
-  if (key === 'arm')
-    return index <= 1 ? 'Needs arms extended' : 'Needs tape or a retake';
-  if (key === 'sleeve')
-    return index === 0 ? 'Needs front pose' : 'Needs tape or a retake';
-  if (key === 'neck')
-    return index < poses.length
-      ? 'Needs side and neck views'
-      : 'Needs tape or a retake';
-  return index <= 2 ? 'Needs front and side views' : 'Needs tape or a retake';
-}
 
 function speak(text: string, voice: SpeechSynthesisVoice) {
   window.speechSynthesis.cancel();
@@ -61,6 +45,17 @@ function speak(text: string, voice: SpeechSynthesisVoice) {
   request.voice = voice;
   request.lang = voice.lang;
   window.speechSynthesis.speak(request);
+}
+
+function queueSpeech(text: string, voice: SpeechSynthesisVoice) {
+  const request = new SpeechSynthesisUtterance(text);
+  request.voice = voice;
+  request.lang = voice.lang;
+  window.speechSynthesis.speak(request);
+}
+
+function isLiveMeasurementKey(key: MeasurementKey): key is LiveMeasurementKey {
+  return liveMeasurementKeys.some((liveKey) => liveKey === key);
 }
 
 export function LiveMeasurementCamera(props: Props) {
@@ -115,9 +110,15 @@ function CameraRun({
   const [overlay, setOverlay] = useState(true);
   const [voice, setVoice] = useState<SpeechSynthesisVoice | null>(null);
   const [voiceNotice, setVoiceNotice] = useState('');
+  const spokenEstimates = useRef(new Set<LiveMeasurementKey>());
   const current = poses[snapshot.index];
   const provisional = error ? null : snapshot.provisional;
   const liveReport = provisional ?? snapshot.report;
+  const completedViews = poses
+    .slice(0, snapshot.index)
+    .filter(({ id }) => !snapshot.skipped.includes(id))
+    .map(({ id }) => id);
+  const captureActive = !error && phase === 'poses' && !snapshot.complete;
   const guidance =
     current && 'tip' in current
       ? `${current.instruction} ${current.tip}`
@@ -159,6 +160,24 @@ function CameraRun({
     snapshot.message,
     guidance,
   ]);
+
+  useEffect(() => {
+    if (!voice || error || phase !== 'poses') return;
+    const newlyAvailable = liveReport.estimates.filter(
+      (estimate): estimate is typeof estimate & { key: LiveMeasurementKey } =>
+        isLiveMeasurementKey(estimate.key) &&
+        !spokenEstimates.current.has(estimate.key),
+    );
+    if (!newlyAvailable.length) return;
+    for (const { key } of newlyAvailable) spokenEstimates.current.add(key);
+    const names = newlyAvailable.map(({ key }) => labels[key].toLowerCase());
+    const message =
+      names.length === 1
+        ? `The ${names[0]} estimate is ready to review with a tape.`
+        : `We have estimates for ${names.slice(0, -1).join(', ')} and ${names.at(-1)}. Check each with a tape.`;
+    const timer = setTimeout(() => queueSpeech(message, voice), 300);
+    return () => clearTimeout(timer);
+  }, [liveReport.estimates, voice, error, phase]);
 
   useEffect(() => {
     const element = video.current;
@@ -671,31 +690,52 @@ function CameraRun({
       >
         <h2 id="live-estimates-title">Live estimates</h2>
         <p className="muted">
-          Experimental body measurements. Figures can change as you hold a pose.
-          Garment ease is separate.
+          Experimental estimates update from repeatable pose evidence. No
+          validated uncertainty intervals are available; model confidence
+          describes capture quality, not physical measurement error. Garment
+          ease is separate.
         </p>
         <dl>
           {liveMeasurementKeys.map((key) => {
             const estimate = liveReport.estimates.find(
               (item) => item.key === key,
             );
-            const refining =
-              !error &&
-              snapshot.held &&
-              current &&
-              poseMeasurements[current.id].includes(key);
-            const evidence = refining
-              ? estimate && provisional
-                ? 'Refining with repeatable frames'
-                : 'Checking frames'
-              : estimate
-                ? 'Ready for tape check'
-                : requestHint(key, snapshot.index);
+            const reviewedEstimate = snapshot.report.estimates.find(
+              (item) => item.key === key,
+            );
+            const progress = measurementProgress(key, {
+              estimate,
+              reviewedEstimate,
+              pose: current?.id,
+              completedViews,
+              captureActive,
+              missing: liveReport.missing[key],
+            });
             return (
-              <div key={key}>
-                <dt>{labels[key]}</dt>
-                <dd>{estimate ? `${Math.round(estimate.valueCm)} cm` : '—'}</dd>
-                <dd className="muted">{evidence}</dd>
+              <div key={key} className={`live-estimate ${progress.state}`}>
+                <dt>
+                  <span>{labels[key]}</span>
+                  <span className="live-estimate-state">{progress.label}</span>
+                </dt>
+                <dd className="live-measurement-value">
+                  {estimate ? `${Math.round(estimate.valueCm)} cm` : '—'}
+                </dd>
+                <dd
+                  className="live-uncertainty"
+                  aria-label="No validated uncertainty interval"
+                >
+                  <span className="uncertainty-indicator" aria-hidden="true" />
+                  No validated interval
+                </dd>
+                <dd className="muted live-progress-detail">
+                  {progress.detail}
+                </dd>
+                {estimate && (
+                  <dd className="muted live-confidence">
+                    Model confidence: {estimate.confidence}; this is not a
+                    physical error range.
+                  </dd>
+                )}
                 {estimate?.sidesCm && (
                   <>
                     <dd className="muted">

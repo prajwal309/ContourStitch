@@ -41,8 +41,9 @@ export default function Measure() {
           <>
             <LockKeyhole className="privacy-icon" aria-hidden="true" />
             <p>
-              Use five guided poses to estimate six body measurements. You can
-              review and correct them before saving a fit profile.
+              Use five guided poses to estimate seven body measurements as
+              evidence becomes available. You can review and correct them before
+              saving a fit profile.
             </p>
             <ul className="privacy-list">
               <li>

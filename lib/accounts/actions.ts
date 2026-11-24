@@ -3,6 +3,7 @@
 import { Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { currentUser } from '@/lib/auth/auth';
+import { leaveAccount } from '@/lib/auth/actions';
 import { database } from '@/lib/auth/db';
 import { prepareProfile } from './profile-data';
 
@@ -25,11 +26,19 @@ export async function createCloudProfile(
   const data = prepareProfile(input);
   if (!data) return invalidError;
 
+  const { unit, estimates, corrections, missing, fingerprint } = data;
   const db = database();
   try {
     const profile = await db.$transaction(async (tx) => {
       const [saved] = await tx.measurementProfile.createManyAndReturn({
-        data: { ...data, userId: user.id },
+        data: {
+          unit,
+          estimates,
+          corrections,
+          missing,
+          fingerprint,
+          userId: user.id,
+        },
         skipDuplicates: true,
         select: { id: true, version: true, updatedAt: true },
       });
@@ -67,12 +76,20 @@ export async function updateCloudProfile(
   const data = prepareProfile(input);
   if (!data) return invalidError;
   if (!validRevision(id, version)) return invalidError;
+  const { unit, estimates, corrections, missing, fingerprint } = data;
 
   try {
     const saved = await database().$transaction(async (tx) => {
       const updated = await tx.measurementProfile.update({
         where: { id, userId: user.id, version },
-        data: { ...data, version: { increment: 1 } },
+        data: {
+          unit,
+          estimates,
+          corrections,
+          missing,
+          fingerprint,
+          version: { increment: 1 },
+        },
         select: { id: true, version: true, updatedAt: true },
       });
       await recordRevision(tx, updated, data);
@@ -136,9 +153,10 @@ async function recordRevision(
     estimates,
     corrections,
     missing,
+    observations,
   }: NonNullable<ReturnType<typeof prepareProfile>>,
 ) {
-  await tx.measurementRevision.create({
+  const revision = await tx.measurementRevision.create({
     data: {
       profileId: profile.id,
       version: profile.version,
@@ -148,6 +166,21 @@ async function recordRevision(
       corrections,
       missing,
     },
+    select: { id: true },
+  });
+  await tx.measurementObservation.createMany({
+    data: observations.map(
+      ({ key, valueCm, uncertaintyCm, confidence, method }) => ({
+        revisionId: revision.id,
+        key,
+        valueCm,
+        unit,
+        uncertaintyCm,
+        confidence,
+        method,
+        recordedAt: profile.updatedAt,
+      }),
+    ),
   });
 }
 
@@ -181,4 +214,53 @@ export async function updateDisplayName(
   } catch {
     return { error: 'Your display name could not be saved.' };
   }
+}
+
+export async function deleteAccount(
+  expectedUserId: string,
+  _: { error?: string },
+  form: FormData,
+): Promise<{ error?: string }> {
+  const user = await authorized(expectedUserId);
+  if (!user)
+    return { error: 'Your session changed. Sign in again to continue.' };
+  if (form.get('confirmation') !== 'DELETE')
+    return { error: 'Type DELETE to confirm.' };
+
+  try {
+    await database().$transaction(
+      async (tx) => {
+        const groups = await tx.familyGroup.findMany({
+          where: { organizerId: user.id },
+          select: {
+            id: true,
+            members: {
+              where: { userId: { not: user.id } },
+              orderBy: [{ joinedAt: 'asc' }, { userId: 'asc' }],
+              take: 1,
+              select: { userId: true },
+            },
+          },
+        });
+        for (const group of groups) {
+          const successor = group.members[0];
+          if (!successor) continue;
+          await tx.familyGroup.update({
+            where: { id: group.id },
+            data: { organizerId: successor.userId },
+          });
+          await tx.familyInvitation.updateMany({
+            where: { groupId: group.id, redeemedAt: null, revokedAt: null },
+            data: { revokedAt: new Date() },
+          });
+        }
+        await tx.user.delete({ where: { id: user.id } });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  } catch {
+    return { error: 'Your account could not be deleted. Please try again.' };
+  }
+  await leaveAccount();
+  return {};
 }

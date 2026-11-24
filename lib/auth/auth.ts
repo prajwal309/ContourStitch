@@ -5,7 +5,8 @@ import NextAuth, { type DefaultSession } from 'next-auth';
 import Google from 'next-auth/providers/google';
 import Facebook from 'next-auth/providers/facebook';
 import { PrismaAdapter } from '@auth/prisma-adapter';
-import { database, databaseUrl } from './db';
+import { authConfiguration } from './configuration';
+import { database } from './db';
 import { oauthIntentCookie, readOAuthIntent } from './oauth-intent';
 
 declare module 'next-auth' {
@@ -17,17 +18,21 @@ declare module 'next-auth' {
 // https://developers.facebook.com/docs/graph-api/changelog/versions/
 const facebookVersion = 'v26.0';
 const providers = [
-  ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
+  ...(authConfiguration.providers.google
     ? [
         Google({
+          clientId: process.env.AUTH_GOOGLE_ID?.trim(),
+          clientSecret: process.env.AUTH_GOOGLE_SECRET?.trim(),
           checks: ['pkce', 'state'],
           allowDangerousEmailAccountLinking: false,
         }),
       ]
     : []),
-  ...(process.env.AUTH_FACEBOOK_ID && process.env.AUTH_FACEBOOK_SECRET
+  ...(authConfiguration.providers.facebook
     ? [
         Facebook({
+          clientId: process.env.AUTH_FACEBOOK_ID?.trim(),
+          clientSecret: process.env.AUTH_FACEBOOK_SECRET?.trim(),
           checks: ['state'],
           allowDangerousEmailAccountLinking: false,
           authorization: {
@@ -78,36 +83,17 @@ const providers = [
     : []),
 ];
 
-function appOrigin() {
-  try {
-    const url = new URL(process.env.AUTH_URL ?? '');
-    if (
-      url.username ||
-      url.password ||
-      url.pathname !== '/' ||
-      url.search ||
-      url.hash
-    )
-      return null;
-    if (url.protocol === 'https:') return url.origin;
-    if (url.protocol === 'http:' && url.hostname === 'localhost')
-      return url.origin;
-  } catch {
-    return null;
-  }
-  return null;
+const { origin, secure, problems } = authConfiguration;
+const authConfigured = origin !== null && problems.length === 0;
+if (authConfigured) {
+  // Auth.js reads AUTH_URL for both server actions and callback handlers.
+  process.env.AUTH_URL = origin;
+} else if (process.env.VERCEL_ENV === 'production') {
+  console.warn('ContourStitch sign-in disabled:', problems.join('. '));
 }
-
-const origin = appOrigin();
-const secure = origin?.startsWith('https://') ?? false;
 const sessionCookie = secure
   ? '__Host-authjs.session-token'
   : 'authjs.session-token';
-const authConfigured =
-  origin &&
-  (process.env.AUTH_SECRET?.length ?? 0) >= 32 &&
-  databaseUrl() &&
-  providers.length;
 
 export const authentication = authConfigured
   ? NextAuth((request) => {
@@ -169,6 +155,10 @@ export const authentication = authConfigured
             )
               return null;
             return result ?? null;
+          },
+          async deleteSession(sessionToken) {
+            // Account deletion may have removed this session before sign-out clears its cookie.
+            await db.session.deleteMany({ where: { sessionToken } });
           },
         },
         providers,

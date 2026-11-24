@@ -19,6 +19,15 @@ describe('cloud profile payload', () => {
     });
     expect(stored).not.toBeNull();
     expect(stored?.corrections).toEqual({ waist: 83 });
+    expect(stored?.unit).toBe('in');
+    expect(
+      stored?.observations.find(({ key }) => key === 'waist'),
+    ).toMatchObject({
+      key: 'waist',
+      valueCm: 83,
+      uncertaintyCm: null,
+      method: 'Manually entered tape measurement',
+    });
     expect(stored?.estimates.find(({ key }) => key === 'waist')).toEqual(
       original.estimates.find(({ key }) => key === 'waist'),
     );

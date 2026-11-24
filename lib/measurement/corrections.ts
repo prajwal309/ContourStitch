@@ -13,11 +13,11 @@ export function tapeEstimate(
   return {
     key,
     valueCm,
-    uncertaintyCm: 2,
+    uncertaintyCm: null,
     confidence: 'low',
     method: tapeMethod,
     warnings: [
-      'Tape entry accuracy is not assessed. The ±2 cm range is a working allowance, not a validated interval. Confirm your tape placement before garment production.',
+      'Tape placement accuracy is not assessed. No validated uncertainty interval is assigned to this entry. Confirm your tape placement before garment production.',
     ],
   };
 }

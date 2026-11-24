@@ -21,7 +21,7 @@ export default defineConfig({
     url: baseURL,
     env: testDatabase
       ? {
-          AUTH_URL: baseURL,
+          AUTH_URL: `${baseURL}/api/auth`,
           AUTH_SECRET: 'local-test-secret-for-playwright-oauth-only',
           AUTH_GOOGLE_ID: 'test-google-client',
           AUTH_GOOGLE_SECRET: 'test-google-secret',

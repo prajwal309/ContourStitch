@@ -5,6 +5,7 @@ import { startOAuth, leaveAccount } from '@/lib/auth/actions';
 import { signInFor } from '@/lib/auth/return-path';
 import { database } from '@/lib/auth/db';
 import { DisplayNameForm } from '@/components/accounts/DisplayNameForm';
+import { DeleteAccountForm } from '@/components/accounts/DeleteAccountForm';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My Account | ContourStitch' };
@@ -64,6 +65,7 @@ export default async function AccountPage() {
               Sign out
             </button>
           </form>
+          <DeleteAccountForm userId={user.id} />
         </section>
       </div>
     </main>

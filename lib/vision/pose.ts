@@ -1,23 +1,26 @@
 import { config } from '@/lib/measurement/config';
 import { imageQuality } from './quality';
 import type { VisionEngine, VisionFrame } from './types';
+import { withMediaPipeStartupLogging } from './media-pipe-logging';
 
 async function createDetector(mode: 'VIDEO' | 'IMAGE') {
-  // https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/web_js
-  const { FilesetResolver, PoseLandmarker } =
-    await import('@mediapipe/tasks-vision');
-  const files = await FilesetResolver.forVisionTasks('/models/wasm');
-  const task = await PoseLandmarker.createFromOptions(files, {
-    baseOptions: {
-      modelAssetPath: '/models/pose_landmarker_full.task',
-      delegate: 'CPU',
-    },
-    runningMode: mode,
-    numPoses: 2,
-    outputSegmentationMasks: true,
-    minPoseDetectionConfidence: config.minVisibility,
-    minPosePresenceConfidence: config.minVisibility,
-    minTrackingConfidence: config.minVisibility,
+  const task = await withMediaPipeStartupLogging(async () => {
+    // https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker/web_js
+    const { FilesetResolver, PoseLandmarker } =
+      await import('@mediapipe/tasks-vision');
+    const files = await FilesetResolver.forVisionTasks('/models/wasm');
+    return PoseLandmarker.createFromOptions(files, {
+      baseOptions: {
+        modelAssetPath: '/models/pose_landmarker_full.task',
+        delegate: 'CPU',
+      },
+      runningMode: mode,
+      numPoses: 2,
+      outputSegmentationMasks: true,
+      minPoseDetectionConfidence: config.minVisibility,
+      minPosePresenceConfidence: config.minVisibility,
+      minTrackingConfidence: config.minVisibility,
+    });
   });
   const canvas = document.createElement('canvas');
   const context = canvas.getContext('2d', { willReadFrequently: true });

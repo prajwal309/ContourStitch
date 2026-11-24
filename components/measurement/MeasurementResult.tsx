@@ -69,9 +69,12 @@ export function MeasurementResult({
         <div>
           <strong>Body measurements, with room for uncertainty.</strong>
           <p>
-            Video estimates are experimental. Where a range is shown, it is a
-            working allowance. Confirm every estimate with a tape before garment
-            production. Garment ease is separate.
+            Video estimates are experimental. A displayed interval is an
+            unvalidated working allowance, not a confidence interval. When
+            calibration is unavailable, no interval is assigned. Model
+            confidence describes capture quality, not physical measurement
+            error. Confirm every estimate with a tape before garment production.
+            Garment ease is separate.
           </p>
         </div>
       </div>
@@ -133,11 +136,15 @@ export function MeasurementResult({
                         <span className={`confidence ${estimate.confidence}`}>
                           {manual
                             ? 'Tape entry'
-                            : estimate.uncertaintyCm === null
-                              ? 'Experimental'
-                              : `${estimate.confidence} confidence`}
+                            : `Model confidence: ${estimate.confidence}`}
                         </span>
                       </div>
+                      {estimate.uncertaintyCm === null && (
+                        <p className="muted">
+                          No validated uncertainty interval is assigned to this
+                          {manual ? ' tape entry.' : ' estimate.'}
+                        </p>
+                      )}
                       {estimate.sidesCm && (
                         <p className="muted">
                           Left {displayValue(estimate.sidesCm.left, unit)}{' '}

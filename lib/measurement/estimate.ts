@@ -6,7 +6,11 @@ import { ellipseCircumference } from './circumference';
 import { landmarkPath, samplingLevels, usable } from './landmarks';
 import { robustWidth, crotchRow, median } from './silhouette';
 import { uncertainty } from './uncertainty';
-import { measurementKeys, type MeasurementReport } from './types';
+import {
+  measurementKeys,
+  type MeasurementKey,
+  type MeasurementReport,
+} from './types';
 function scaleFor(capture: Capture, height: number) {
   const mask = capture.mask,
     bounds = maskBounds(mask);
@@ -35,7 +39,7 @@ export function estimateMeasurements(
     ss = scaleFor(side, height);
   const difference = fs && ss ? Math.abs(fs - ss) / Math.max(fs, ss) : 1;
   function add(
-    key: keyof typeof config.baseUncertainty,
+    key: MeasurementKey,
     value: number | null,
     method: string,
     views: Capture[] = [front],

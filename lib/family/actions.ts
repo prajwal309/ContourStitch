@@ -21,17 +21,20 @@ export async function createGroup(
 ): Promise<Response> {
   if ((await currentUser())?.id !== userId) return { error: expiredSession };
   const name = form.get('name');
+  const occasion = form.get('occasion');
   const collection = form.get('collection');
   if (
     typeof name !== 'string' ||
     name.trim().length < 2 ||
     name.trim().length > 80 ||
+    (occasion !== null &&
+      (typeof occasion !== 'string' || occasion.trim().length > 120)) ||
     typeof collection !== 'string' ||
     !getCollection(collection)
   ) {
     return {
       error:
-        'Enter a group name of 2 to 80 characters and choose a collection.',
+        'Enter a group name of 2 to 80 characters and an optional occasion of up to 120 characters.',
     };
   }
 
@@ -40,6 +43,7 @@ export async function createGroup(
     const group = await database().familyGroup.create({
       data: {
         name: name.trim(),
+        occasion: typeof occasion === 'string' ? occasion.trim() || null : null,
         collectionKey: collection,
         organizerId: userId,
         members: { create: { userId } },

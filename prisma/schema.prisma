@@ -21,6 +21,7 @@ model User {
   familyMemberships FamilyMembership[]
   redeemedInvites   FamilyInvitation[]
   outfitSelections  OutfitSelection[]
+  receivedFitShares FamilyProfileShare[]
 }
 
 model Account {
@@ -48,6 +49,25 @@ enum MeasurementUnit {
   in
 }
 
+enum MeasurementKey {
+  height
+  shoulder
+  chest
+  waist
+  hip
+  sleeve
+  inseam
+  outseam
+  arm
+  neck
+}
+
+enum MeasurementConfidence {
+  low
+  medium
+  high
+}
+
 model MeasurementProfile {
   id          String                @id @default(cuid())
   userId      String
@@ -67,23 +87,42 @@ model MeasurementProfile {
 }
 
 model MeasurementRevision {
-  id          String             @id @default(cuid())
-  profileId   String
-  version     Int
-  unit        MeasurementUnit
-  estimates   Json
-  corrections Json
-  missing     Json
-  recordedAt  DateTime
-  profile     MeasurementProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
-  selections  OutfitSelection[]
+  id           String               @id @default(cuid())
+  profileId    String
+  version      Int
+  unit         MeasurementUnit
+  estimates    Json
+  corrections  Json
+  missing      Json
+  recordedAt   DateTime
+  profile      MeasurementProfile   @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  selections   OutfitSelection[]
+  familyShares FamilyProfileShare[]
+  measurements MeasurementObservation[]
 
   @@unique([profileId, version])
+}
+
+model MeasurementObservation {
+  id            String                 @id @default(cuid())
+  revisionId    String
+  key           MeasurementKey
+  valueCm       Float
+  unit          MeasurementUnit
+  uncertaintyCm Float?
+  confidence    MeasurementConfidence
+  method        String
+  recordedAt    DateTime
+  revision      MeasurementRevision    @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@unique([revisionId, key])
+  @@index([key, recordedAt])
 }
 
 model FamilyGroup {
   id            String             @id @default(cuid())
   name          String
+  occasion      String?
   collectionKey String
   organizerId   String
   createdAt     DateTime           @default(now())
@@ -98,12 +137,27 @@ model FamilyGroup {
 model FamilyMembership {
   groupId  String
   userId   String
-  joinedAt DateTime    @default(now())
-  group    FamilyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt DateTime            @default(now())
+  group    FamilyGroup         @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fitShare FamilyProfileShare?
 
   @@id([groupId, userId])
   @@index([userId, joinedAt])
+}
+
+model FamilyProfileShare {
+  groupId     String
+  memberId    String
+  organizerId String
+  revisionId  String
+  membership  FamilyMembership    @relation(fields: [groupId, memberId], references: [groupId, userId], onDelete: Cascade)
+  organizer   User                @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  revision    MeasurementRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, memberId])
+  @@index([organizerId])
+  @@index([revisionId])
 }
 
 model FamilyInvitation {

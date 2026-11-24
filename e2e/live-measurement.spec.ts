@@ -53,9 +53,12 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
   const sleeve = page.locator('.live-estimates dl > div').filter({
     has: page.getByText('Sleeve length', { exact: true }),
   });
-  await expect(
-    sleeve.getByText('Refining with repeatable frames'),
-  ).toBeVisible();
+  const shoulder = page.locator('.live-estimates dl > div').filter({
+    has: page.getByText('Shoulder breadth', { exact: true }),
+  });
+  await expect(shoulder.getByText('Preliminary estimate')).toBeVisible();
+  await expect(shoulder.getByText('No validated interval')).toBeVisible();
+  await expect(sleeve.getByText('Preliminary estimate')).toBeVisible();
   await expect(sleeve.getByText(/^\d+ cm$/)).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Scan complete' }),
@@ -72,7 +75,7 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
     ),
   ).toBe(true);
   await page.getByRole('button', { name: 'Review measurements' }).click();
-  await expect(page.getByText('6 of 6 measurements')).toBeVisible();
+  await expect(page.getByText('7 of 7 measurements')).toBeVisible();
   await page.getByRole('button', { name: 'Edit Neck circumference' }).click();
   await page.getByLabel('Neck circumference in centimetres').fill('39');
   await page.getByRole('button', { name: 'Apply measurement' }).click();
@@ -83,7 +86,7 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
   const saved = await page.evaluate(() =>
     JSON.parse(localStorage.getItem('contourstitch.profile.v1') ?? 'null'),
   );
-  expect(saved.report.estimates).toHaveLength(6);
+  expect(saved.report.estimates).toHaveLength(7);
   expect(
     saved.report.estimates.find(({ key }: { key: string }) => key === 'neck'),
   ).toMatchObject({ valueCm: 39 });
@@ -135,5 +138,5 @@ test('the real on-device model withholds estimates from a blank camera feed', as
   await page
     .getByRole('button', { name: 'Enter tape measurements instead' })
     .click();
-  await expect(page.getByText('0 of 6 measurements')).toBeVisible();
+  await expect(page.getByText('0 of 7 measurements')).toBeVisible();
 });

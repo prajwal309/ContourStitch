@@ -33,6 +33,10 @@ export function CreateGroupForm({ userId }: { userId: string }) {
             required
           />
         </label>
+        <label>
+          Fitting occasion (optional)
+          <input name="occasion" maxLength={120} />
+        </label>
         <input type="hidden" name="collection" value={collections[0].key} />
         <button type="submit" className="button">
           {pending ? 'Creating…' : 'Create group'}

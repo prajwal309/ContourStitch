@@ -6,6 +6,10 @@ import { signInFor } from '@/lib/auth/return-path';
 import { profileDate } from '@/lib/accounts/dates';
 import { invitationState } from '@/lib/family/invitation-state';
 import { InvitationPanel } from '@/components/family/GroupForms';
+import { MeasurementSharing } from '@/components/family/MeasurementSharing';
+import { restoreProfile } from '@/lib/accounts/profile-data';
+import { labels } from '@/lib/measurement/types';
+import { displayValue } from '@/lib/measurement/units';
 
 export const dynamic = 'force-dynamic';
 export const metadata = {
@@ -28,13 +32,15 @@ export default async function Group({
     where: { id, members: { some: { userId: user.id } } },
     select: {
       name: true,
+      occasion: true,
       organizerId: true,
+      organizer: { select: { name: true } },
       _count: { select: { members: true } },
     },
   });
   if (!group) notFound();
   const isOrganizer = group.organizerId === user.id;
-  const [members, invites] = await Promise.all([
+  const [members, invites, shares, profiles] = await Promise.all([
     isOrganizer
       ? db.familyMembership.findMany({
           where: { groupId: id },
@@ -54,7 +60,51 @@ export default async function Group({
           },
         })
       : Promise.resolve([]),
+    db.familyProfileShare.findMany({
+      where: {
+        groupId: id,
+        organizerId: group.organizerId,
+        membership: { group: { organizerId: group.organizerId } },
+        ...(isOrganizer ? {} : { memberId: user.id }),
+      },
+      select: {
+        memberId: true,
+        revision: {
+          select: {
+            version: true,
+            recordedAt: true,
+            unit: true,
+            estimates: true,
+            corrections: true,
+            missing: true,
+          },
+        },
+      },
+    }),
+    isOrganizer
+      ? Promise.resolve([])
+      : db.measurementProfile.findMany({
+          where: { userId: user.id },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+          select: {
+            revisions: {
+              orderBy: { version: 'desc' },
+              take: 1,
+              select: { id: true, version: true, recordedAt: true },
+            },
+          },
+        }),
   ]);
+  const shared = new Map(
+    shares.map(({ memberId, revision }) => [memberId, revision]),
+  );
+  const label = ({
+    version,
+    recordedAt,
+  }: {
+    version: number;
+    recordedAt: Date;
+  }) => `${profileDate(recordedAt)} · Version ${version}`;
 
   return (
     <main id="main" className="market-page">
@@ -67,18 +117,46 @@ export default async function Group({
           {group._count.members === 1 ? 'member' : 'members'}
         </p>
         <h1>{group.name}</h1>
+        {group.occasion && <p>{group.occasion}</p>}
       </header>
       <div className={isOrganizer ? 'studio-columns' : undefined}>
         <section className="studio-panel">
           <h2>{isOrganizer ? 'Group members' : 'Your membership'}</h2>
           <ul className="studio-list">
-            {members.map((member) => (
-              <li key={member.userId}>
-                {member.userId === user.id
-                  ? 'You'
-                  : member.user.name || 'Group member'}
-              </li>
-            ))}
+            {members.map((member) => {
+              const revision = shared.get(member.userId);
+              const profile =
+                isOrganizer && revision && restoreProfile(revision);
+              return (
+                <li key={member.userId}>
+                  <div>
+                    <strong>
+                      {member.userId === user.id
+                        ? 'You'
+                        : member.user.name || 'Group member'}
+                    </strong>
+                    {profile && revision && (
+                      <details className="revision-detail">
+                        <summary>
+                          Shared measurements · {label(revision)}
+                        </summary>
+                        <dl className="measurement-requirements">
+                          {profile.report.estimates.map(({ key, valueCm }) => (
+                            <div key={key}>
+                              <dt>{labels[key]}</dt>
+                              <dd>
+                                {displayValue(valueCm, profile.unit)}{' '}
+                                {profile.unit}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      </details>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </section>
         {isOrganizer && (
@@ -95,6 +173,21 @@ export default async function Group({
           />
         )}
       </div>
+      {!isOrganizer && (
+        <MeasurementSharing
+          groupId={id}
+          userId={user.id}
+          organizerId={group.organizerId}
+          organizerName={group.organizer.name || 'the group organizer'}
+          choices={profiles.flatMap(({ revisions }, index) =>
+            revisions.map((revision) => ({
+              id: revision.id,
+              label: `${index === 0 ? 'Latest profile' : `Profile ${index + 1}`} · ${label(revision)}`,
+            })),
+          )}
+          active={shares[0] ? label(shares[0].revision) : null}
+        />
+      )}
     </main>
   );
 }

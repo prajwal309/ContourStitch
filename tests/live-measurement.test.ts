@@ -16,8 +16,10 @@ import { liveMeasurementKeys } from '@/lib/measurement/types';
 import {
   correctMeasurement,
   mergeMeasurements,
+  tapeEstimate,
 } from '@/lib/measurement/corrections';
 import { prepareProfile, restoreProfile } from '@/lib/accounts/profile-data';
+import { measurementProgress } from '@/lib/live-measurement/progress';
 import { liveFrame } from './live-fixture';
 
 const calibration = { kind: 'height', heightCm: 175 } as const;
@@ -131,9 +133,10 @@ describe('guided video measurements', () => {
     const side = Array.from({ length: 5 }, () => collect('side'));
     const estimate = (views: Partial<Record<Pose, Sample[]>>) =>
       silhouetteEstimator.report(views, calibration);
-    expect(
-      estimate({ front }).estimates.some(({ key }) => key === 'chest'),
-    ).toBe(false);
+    expect(estimate({ front }).estimates.map(({ key }) => key)).toEqual([
+      'shoulder',
+      'sleeve',
+    ]);
     expect(
       estimate({ front, side }).estimates.some(({ key }) => key === 'chest'),
     ).toBe(true);
@@ -147,6 +150,73 @@ describe('guided video measurements', () => {
     side[0].widths.chest = 10;
     side[1].widths.chest = 60;
     expect(estimate({ front, side }).missing.chest).toBeDefined();
+  });
+
+  it('reports explicit progress states from actual measurement dependencies', () => {
+    const chest = {
+      key: 'chest' as const,
+      valueCm: 97,
+      uncertaintyCm: null,
+      confidence: 'low' as const,
+      method: 'Experimental ellipse estimate',
+      warnings: [],
+    };
+    expect(
+      measurementProgress('chest', {
+        completedViews: ['front'],
+        captureActive: false,
+      }),
+    ).toMatchObject({
+      state: 'unavailable',
+      label: 'Not available',
+      detail: 'Needs side view.',
+    });
+    expect(
+      measurementProgress('chest', {
+        pose: 'side',
+        completedViews: ['front'],
+        captureActive: true,
+      }).state,
+    ).toBe('collecting');
+    expect(
+      measurementProgress('chest', {
+        estimate: chest,
+        pose: 'side',
+        completedViews: ['front'],
+        captureActive: true,
+      }).state,
+    ).toBe('preliminary');
+    expect(
+      measurementProgress('chest', {
+        estimate: chest,
+        reviewedEstimate: chest,
+        pose: 'back',
+        completedViews: ['front', 'side'],
+        captureActive: true,
+      }).state,
+    ).toBe('refined');
+    expect(
+      measurementProgress('chest', {
+        estimate: chest,
+        reviewedEstimate: chest,
+        completedViews: ['front', 'side'],
+        captureActive: false,
+      }).state,
+    ).toBe('ready');
+    expect(
+      measurementProgress('chest', {
+        estimate: tapeEstimate('chest', 98),
+        completedViews: ['front', 'side'],
+        captureActive: false,
+      }).state,
+    ).toBe('corrected');
+  });
+
+  it('does not assign a physical interval to tape corrections', () => {
+    expect(tapeEstimate('waist', 82)).toMatchObject({
+      uncertaintyCm: null,
+      confidence: 'low',
+    });
   });
 
   it('round-trips experimental evidence and corrections in the existing profile payload', () => {

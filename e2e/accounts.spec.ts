@@ -31,6 +31,14 @@ test('guest can save and reload measurements locally', async ({ page }) => {
   await expect(
     page.getByRole('link', { name: 'Continue as a guest' }),
   ).toBeVisible();
+  if (!databaseUrl) {
+    await expect(
+      page.getByText('Account sign-in is currently unavailable.'),
+    ).toBeVisible();
+    expect((await page.request.get('/api/auth/providers')).status()).toBe(503);
+    await page.getByRole('link', { name: 'Continue as a guest' }).click();
+    await expect(page).toHaveURL(/\/measure$/);
+  }
 });
 
 async function completeOAuth(
@@ -61,6 +69,7 @@ async function completeOAuth(
   });
   const request = await providerUrl;
   const callback = new URL(request.searchParams.get('redirect_uri') ?? '');
+  expect(callback.pathname).toBe(`/api/auth/callback/${provider}`);
   const state = request.searchParams.get('state');
   expect(state).toBeTruthy();
   if (provider === 'google')
@@ -211,6 +220,9 @@ test('OAuth linking, private cloud profiles, and expired sessions', async ({
       page.getByRole('heading', { name: 'My Fit Profile' }),
     ).toBeVisible();
     await page.goto(profileUrl);
+    await expect(page.locator('.measurement-value').first()).toContainText(
+      '84',
+    );
     const user = await db.user.findUniqueOrThrow({
       where: { email: `${run}-one@example.test` },
     });
@@ -254,7 +266,7 @@ test('OAuth linking, private cloud profiles, and expired sessions', async ({
   }
 });
 
-test('family invitations and saved outfit privacy still work while the shop is paused', async ({
+test('family invitations, private measurement sharing, and account deletion', async ({
   page,
   browser,
   baseURL,
@@ -280,10 +292,12 @@ test('family invitations and saved outfit privacy still work while the shop is p
       'Continue with Google',
     );
     await page.getByLabel('Group name').fill('Wedding fitting');
+    await page.getByLabel('Fitting occasion').fill('Reception in June');
     await page.getByRole('button', { name: 'Create group' }).click();
     await expect(
       page.getByRole('heading', { name: 'Wedding fitting' }),
     ).toBeVisible();
+    await expect(page.getByText('Reception in June')).toBeVisible();
     const groupUrl = page.url();
     const groupId = new URL(groupUrl).pathname.split('/').at(-1)!;
 
@@ -369,6 +383,15 @@ test('family invitations and saved outfit privacy still work while the shop is p
     const revision = await db.measurementRevision.findFirstOrThrow({
       where: { profileId: profile.id, version: 1 },
     });
+    const observations = await db.measurementObservation.findMany({
+      where: { revisionId: revision.id },
+    });
+    expect(observations.find(({ key }) => key === 'chest')).toMatchObject({
+      valueCm: 104.37,
+      unit: 'cm',
+      uncertaintyCm: null,
+      method: 'Manually entered tape measurement',
+    });
     const selection = await db.outfitSelection.create({
       data: {
         userId: wearer.id,
@@ -405,6 +428,17 @@ test('family invitations and saved outfit privacy still work while the shop is p
     ).toHaveCount(0);
     await expect(page.getByText(/104\.37|116\.8/)).toHaveCount(0);
     expect(await page.content()).not.toContain('116.8');
+    await expect(
+      page.getByText('Waist circumference', { exact: true }),
+    ).toHaveCount(0);
+    await member.getByLabel('Saved measurement set').selectOption(revision.id);
+    await member.getByRole('button', { name: 'Share with organizer' }).click();
+    await expect(member.getByRole('status')).toContainText(
+      'Measurements shared with the organizer.',
+    );
+    await page.reload();
+    await page.getByText('Shared measurements', { exact: false }).click();
+    await expect(page.getByText('83 cm', { exact: true })).toBeVisible();
 
     await member.goto('/account');
     await expect(member.getByText(/Heritage Kurta|saved outfits/i)).toHaveCount(
@@ -437,6 +471,31 @@ test('family invitations and saved outfit privacy still work while the shop is p
       where: { profileId: profile.id, version: 2 },
     });
     expect(latest.corrections).toMatchObject({ waist: 88 });
+    await expect(
+      db.measurementObservation.findUnique({
+        where: {
+          revisionId_key: { revisionId: latest.id, key: 'waist' },
+        },
+      }),
+    ).resolves.toMatchObject({
+      valueCm: 88,
+      uncertaintyCm: null,
+      method: 'Manually entered tape measurement',
+    });
+
+    await page.goto(groupUrl);
+    await page.getByText('Shared measurements', { exact: false }).click();
+    await expect(page.getByText('83 cm', { exact: true })).toBeVisible();
+    await expect(page.getByText('88 cm', { exact: true })).toHaveCount(0);
+    await member.goto(groupUrl);
+    await member.getByRole('button', { name: 'Revoke access' }).click();
+    await expect(member.getByRole('status')).toContainText(
+      'Measurement access revoked.',
+    );
+    await page.reload();
+    await expect(
+      page.getByText('Waist circumference', { exact: true }),
+    ).toHaveCount(0);
 
     const stranger = await strangerContext.newPage();
     await stranger.goto('/sign-in');
@@ -457,9 +516,56 @@ test('family invitations and saved outfit privacy still work while the shop is p
         'This invitation is invalid',
       );
     }
+
+    await member.getByLabel('Saved measurement set').selectOption(latest.id);
+    await member.getByRole('button', { name: 'Share with organizer' }).click();
+    await expect(member.getByRole('status')).toContainText(
+      'Measurements shared with the organizer.',
+    );
+    const organizer = await db.user.findUniqueOrThrow({
+      where: { email: `${run}-organizer@example.test` },
+    });
+    await confirmAccountDeletion(page);
+    await expect(db.user.count({ where: { id: organizer.id } })).resolves.toBe(
+      0,
+    );
+    await expect(
+      db.familyProfileShare.count({ where: { groupId } }),
+    ).resolves.toBe(0);
+    await expect(
+      db.familyGroup.findUnique({ where: { id: groupId } }),
+    ).resolves.toMatchObject({ organizerId: wearer.id });
+    await expect(
+      db.measurementProfile.count({ where: { userId: wearer.id } }),
+    ).resolves.toBe(1);
+    await confirmAccountDeletion(member);
+    await expect(
+      db.session.count({ where: { userId: wearer.id } }),
+    ).resolves.toBe(0);
+    await expect(
+      db.account.count({ where: { userId: wearer.id } }),
+    ).resolves.toBe(0);
+    await expect(
+      db.measurementProfile.count({ where: { userId: wearer.id } }),
+    ).resolves.toBe(0);
+    await expect(
+      db.measurementRevision.count({ where: { profileId: profile.id } }),
+    ).resolves.toBe(0);
   } finally {
     await Promise.all([memberContext.close(), strangerContext.close()]);
     await db.user.deleteMany({ where: { email: { startsWith: run } } });
     await db.$disconnect();
   }
 });
+
+async function confirmAccountDeletion(page: Page) {
+  await page.goto('/account');
+  await page.getByText('Delete my account', { exact: true }).click();
+  await page.getByLabel('Type DELETE to confirm').fill('DELETE');
+  await page
+    .getByRole('button', { name: 'Permanently delete account' })
+    .click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto('/account');
+  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
+}
