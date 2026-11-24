@@ -118,8 +118,7 @@ export function analyzeFrame(
     bodyHeight <= c.maxBodyHeight
       ? 1
       : 0;
-  const orientationScore =
-    angle === null ? 0 : category === 'UNKNOWN' ? 0.4 : 1;
+  const orientationScore = angle === null ? 0 : 1;
   const quality = instruction
     ? 0
     : Math.min(

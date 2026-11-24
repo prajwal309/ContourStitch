@@ -91,6 +91,7 @@ export default function RootLayout({
             </Link>
 
             <nav aria-label="Main navigation">
+              <Link href="/founder">Founder</Link>
               <Link href="/measure">Measure</Link>
               <Link
                 href="/my-measurements"
@@ -122,10 +123,6 @@ export default function RootLayout({
               {brand.name}
             </Link>
 
-            <nav className="footer-links" aria-label="About ContourStitch">
-              <Link href="/#how-it-works">How it works</Link>
-              <Link href="/founder">Founder</Link>
-            </nav>
             <span>{brand.tagline}</span>
           </footer>
         </SessionProvider>

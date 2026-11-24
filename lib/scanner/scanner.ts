@@ -1,4 +1,6 @@
 import type { VisionFrame } from '@/lib/vision/types';
+import type { SilhouetteObservation } from '@/lib/reconstruction/types';
+import { normalizeSilhouette } from '@/lib/reconstruction/silhouette';
 import { scanConfig as c } from './config';
 import { analyzeFrame, angleDelta } from './analysis';
 import { extractFeatures, aggregate } from './features';
@@ -10,7 +12,7 @@ import type {
   ScanView,
   MeasurementCalibration,
 } from './types';
-/** Keeps bounded numerical features only. No photographs, video or masks are retained. */
+/** Keeps bounded features; optional mode retains only low-resolution binary masks in memory. */
 export class Scanner {
   private previous: VisionFrame | null = null;
   private angle: number | null = null;
@@ -20,6 +22,8 @@ export class Scanner {
   private travel = 0;
   private lastMoving: number | null = null;
   private warnings = new Set<string>();
+  private readonly silhouetteViewCount: number;
+  private silhouetteViews: (SilhouetteObservation | null)[];
   private views: Record<ScanView, Candidate[]> = {
     FRONT: [],
     LEFT_SIDE: [],
@@ -35,7 +39,18 @@ export class Scanner {
     analysis: null,
     result: null,
   };
-  constructor(private calibration: MeasurementCalibration) {}
+  constructor(
+    private calibration: MeasurementCalibration,
+    options: { silhouetteViewCount?: number } = {},
+  ) {
+    this.silhouetteViewCount = options.silhouetteViewCount ?? 0;
+    if (
+      this.silhouetteViewCount !== 0 &&
+      ![4, 8, 16, 32, 64].includes(this.silhouetteViewCount)
+    )
+      throw new Error('Silhouette view count must be 4, 8, 16, 32, or 64.');
+    this.silhouetteViews = Array(this.silhouetteViewCount).fill(null);
+  }
   update(frame: VisionFrame): ScanSnapshot {
     if (this.snapshot.state === 'COMPLETE' || this.snapshot.state === 'ERROR')
       return this.snapshot;
@@ -58,6 +73,10 @@ export class Scanner {
         state,
         instruction,
         analysis,
+        silhouetteViewsCaptured: this.silhouetteViews.filter(Boolean).length,
+        ...(this.silhouetteViewCount
+          ? { silhouetteTargetViews: this.silhouetteViewCount }
+          : {}),
         speed,
         direction:
           Math.abs(speed) < c.minSpeed ? 'still' : speed > 0 ? 'right' : 'left',
@@ -106,6 +125,31 @@ export class Scanner {
       samples.sort((a, b) => b.quality - a.quality);
       samples.splice(c.candidatesPerView);
     };
+    const addSilhouette = () => {
+      if (
+        !this.silhouetteViewCount ||
+        analysis.quality < c.minimumQuality ||
+        !frame.mask
+      )
+        return;
+      const spacing = 360 / this.silhouetteViewCount;
+      const slot = Math.round(this.travel / spacing) % this.silhouetteViewCount;
+      const targetAngle = slot * spacing;
+      const angleError = Math.abs(
+        ((this.travel - targetAngle + 540) % 360) - 180,
+      );
+      if (angleError > Math.max(1, Math.min(20, spacing * 0.45))) return;
+      if (
+        this.silhouetteViews[slot] &&
+        this.silhouetteViews[slot].quality >= analysis.quality
+      )
+        return;
+      this.silhouetteViews[slot] = normalizeSilhouette(
+        frame,
+        this.travel,
+        analysis.quality,
+      );
+    };
     if (!this.rotating) {
       if (analysis.orientation !== 'FRONT') {
         this.held = null;
@@ -120,6 +164,7 @@ export class Scanner {
       }
       this.held ??= now;
       add();
+      addSilhouette();
       if (
         now - this.held < c.holdMs ||
         this.views.FRONT.length < c.minimumCandidates
@@ -142,6 +187,7 @@ export class Scanner {
       this.travel += delta;
       if (speed >= c.minSpeed) this.lastMoving = now;
     }
+    addSilhouette();
     // Require views in sequence; a noisy jump cannot manufacture full coverage.
     const next: ScanView =
       this.views.LEFT_SIDE.length < c.minimumCandidates
@@ -162,6 +208,22 @@ export class Scanner {
       const result = aggregate(this.calibration.heightCm, this.views, [
         ...this.warnings,
       ]);
+      const silhouettes = this.silhouetteViews.filter(
+        (view): view is SilhouetteObservation => view !== null,
+      );
+      if (
+        this.silhouetteViewCount &&
+        silhouettes.length < this.silhouetteViewCount
+      )
+        result.quality.warnings.push(
+          `Only ${silhouettes.length} of ${this.silhouetteViewCount} requested silhouette angles passed capture quality checks.`,
+        );
+      if (silhouettes.length) {
+        result.silhouetteViews = silhouettes;
+        result.silhouetteCoveragePercent = Math.round(
+          (silhouettes.length / this.silhouetteViewCount) * 100,
+        );
+      }
       set('COMPLETE', 'SCAN_COMPLETE');
       this.snapshot = { ...this.snapshot, progress: 100, result };
       this.previous = null;

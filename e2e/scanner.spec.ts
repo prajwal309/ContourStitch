@@ -73,16 +73,40 @@ for (const debug of [false, true])
           };
         };
     });
-    await page.goto(debug ? '/measure/experimental?debug=1' : '/measure/experimental');
+    await page.goto(
+      debug ? '/measure/experimental?debug=1' : '/measure/experimental',
+    );
+    if (debug) {
+      await page
+        .getByRole('radio', {
+          name: /Multi-View Silhouette Reconstruction — Beta/,
+        })
+        .check();
+      await page.getByLabel('Silhouette views').selectOption('4');
+    }
     await page.getByRole('checkbox').check();
-    await page.getByRole('button', { name: 'Start measurement' }).click();
+    await page.getByRole('button', { name: 'Continue →' }).click();
     await page.getByRole('button', { name: 'Continue to video scan' }).click();
     await expect(
       page.getByRole('heading', { name: 'Scan complete', exact: true }),
     ).toBeVisible({ timeout: 40000 });
     await expect(
-      page.getByText('Confidence intervals are unavailable', { exact: false }),
+      page.getByText('No calibrated uncertainty interval is available.', {
+        exact: false,
+      }),
     ).toBeVisible();
+    if (debug) {
+      await expect(
+        page.getByRole('heading', {
+          name: 'Multi-view silhouette reconstruction',
+        }),
+      ).toBeVisible();
+      await expect(
+        page.getByLabel(
+          'Interactive voxel surface reconstruction; drag to rotate, or use the arrow keys.',
+        ),
+      ).toBeVisible();
+    }
     expect(
       await page.evaluate(
         () => (window as Window & { cameraStopped?: boolean }).cameraStopped,
@@ -117,13 +141,11 @@ test('permission denial offers restart and closes cleanly', async ({
   );
   await page.goto('/measure/experimental');
   await page.getByRole('checkbox').check();
-  await page.getByRole('button', { name: 'Start measurement' }).click();
+  await page.getByRole('button', { name: 'Continue →' }).click();
   await page.getByRole('button', { name: 'Continue to video scan' }).click();
   await expect(page.locator('main').getByRole('alert')).toContainText(
     'permission was denied',
   );
   await page.getByRole('button', { name: 'Close scanner' }).click();
-  await expect(
-    page.getByRole('button', { name: 'Start measurement' }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Continue →' })).toBeVisible();
 });

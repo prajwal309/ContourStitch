@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { LockKeyhole } from 'lucide-react';
 import { HeightForm } from '@/components/measurement/HeightForm';
 import { LiveMeasurementCamera } from '@/components/live-measurement/LiveMeasurementCamera';
@@ -83,6 +84,9 @@ export default function Measure() {
             <button type="button" className="text-button" onClick={tapeEntry}>
               Enter tape measurements instead
             </button>
+            <Link className="text-button" href="/measure/experimental">
+              Compare experimental measurement engines
+            </Link>
           </>
         )}
         {step === 'calibration' && (

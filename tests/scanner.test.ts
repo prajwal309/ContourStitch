@@ -9,6 +9,7 @@ import {
   mapOutputs,
   outputNames,
 } from '@/lib/scanner/measurementModel';
+import { reconstructVisualHull } from '@/lib/reconstruction/visual-hull';
 import type { VisionFrame } from '@/lib/vision/types';
 function frame(angle = 0, timestamp = 0): VisionFrame {
   const f = fixture();
@@ -88,7 +89,38 @@ describe('video scanner', () => {
     expect(scanner.snapshot.result?.features.chestFrontRatio).toBeGreaterThan(
       0,
     );
-  });
+  }, 15_000);
+  it.each([4, 8])(
+    'captures quality-gated binary silhouettes for %i requested turn angles',
+    (viewCount) => {
+      const scanner = new Scanner(
+        { type: 'KNOWN_HEIGHT', heightCm: 170 },
+        { silhouetteViewCount: viewCount },
+      );
+      let time = 0;
+      for (time = 0; time <= 1500; time += 100) scanner.update(frame(0, time));
+      for (let angle = 2; angle <= 360; angle += 2) {
+        scanner.update(frame(angle, time));
+        time += 100;
+      }
+      for (let i = 0; i < 15; i++) {
+        scanner.update(frame(0, time));
+        time += 100;
+      }
+      const captures = scanner.snapshot.result?.silhouetteViews ?? [];
+      expect(scanner.snapshot.state).toBe('COMPLETE');
+      expect(captures.length).toBeGreaterThanOrEqual(4);
+      expect(captures.length).toBeLessThanOrEqual(viewCount);
+      expect(
+        captures.every((capture) => capture.data.every((pixel) => pixel <= 1)),
+      ).toBe(true);
+      expect(scanner.snapshot.silhouetteTargetViews).toBe(viewCount);
+      expect(() =>
+        reconstructVisualHull({ heightCm: 170, views: captures }),
+      ).not.toThrow();
+    },
+    15_000,
+  );
   it('does not finish on elapsed time alone and times out', () => {
     const s = new Scanner({ type: 'KNOWN_HEIGHT', heightCm: 170 });
     s.update(frame(0, 0));

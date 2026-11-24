@@ -17,7 +17,7 @@ export default defineConfig({
   },
   webServer: {
     command:
-      'NEXT_PUBLIC_SCANNER_TEST_MODE=1 npm run dev -- --hostname localhost --port 3100',
+      'NEXT_PUBLIC_SCANNER_TEST_MODE=1 NEXT_DIST_DIR=.next-e2e npm run dev -- --hostname localhost --port 3100',
     url: baseURL,
     env: testDatabase
       ? {

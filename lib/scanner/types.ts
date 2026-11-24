@@ -1,4 +1,5 @@
 import type { VisionFrame } from '@/lib/vision/types';
+import type { SilhouetteObservation } from '@/lib/reconstruction/types';
 export type ScanState =
   | 'FIND_PERSON'
   | 'CHECK_FULL_BODY'
@@ -80,11 +81,19 @@ export type ScanQuality = {
   backQuality: number;
   rightQuality: number;
 };
-export type ScanResult = { features: BodyScanFeatures; quality: ScanQuality };
+export type ScanResult = {
+  features: BodyScanFeatures;
+  quality: ScanQuality;
+  /** Optional, low-resolution binary masks held only in this scan's memory. */
+  silhouetteViews?: SilhouetteObservation[];
+  silhouetteCoveragePercent?: number;
+};
 export type ScanSnapshot = {
   state: ScanState;
   instruction: InstructionId;
   progress: number;
+  silhouetteViewsCaptured?: number;
+  silhouetteTargetViews?: number;
   speed: number;
   direction: 'right' | 'left' | 'still';
   analysis: FrameAnalysis | null;

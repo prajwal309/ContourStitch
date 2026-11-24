@@ -17,17 +17,17 @@ To use the already-connected Vercel project locally, run `vercel link` and then 
 
 The app uses the Vercel Postgres connection variables directly. Runtime prefers `DATABASE_URL_POOLED`, then `POSTGRES_PRISMA_URL`, `DATABASE_URL`, `POSTGRES_URL`, and `POSTGRES_URL_NON_POOLING`. Migrations prefer `DATABASE_URL` and `POSTGRES_URL_NON_POOLING` so they use a direct connection when available.
 
-| Setting                                    | Purpose                                                                                   |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| Setting                                    | Purpose                                                                                                              |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
 | `AUTH_URL`                                 | Canonical origin. Use `http://localhost:3000` locally and `https://contourstitchv1.vercel.app` in Vercel Production. |
-| `AUTH_SECRET`                              | Generate a separate random secret for each environment, e.g. `openssl rand -base64 32`    |
-| `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`     | Web application OAuth client credentials                                                  |
-| `AUTH_FACEBOOK_ID`, `AUTH_FACEBOOK_SECRET` | Meta app ID and app secret for Facebook Login                                             |
-| `DATABASE_URL`                             | Optional direct PostgreSQL connection for Prisma migrations and local use                 |
-| `DATABASE_URL_POOLED`                      | Optional pooled PostgreSQL connection for runtime                                          |
-| `POSTGRES_PRISMA_URL`                      | Vercel Postgres Prisma-compatible pooled runtime connection                               |
-| `POSTGRES_URL`                             | Vercel Postgres connection fallback                                                       |
-| `POSTGRES_URL_NON_POOLING`                 | Vercel Postgres direct connection for Prisma migrations                                   |
+| `AUTH_SECRET`                              | Generate a separate random secret for each environment, e.g. `openssl rand -base64 32`                               |
+| `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`     | Web application OAuth client credentials                                                                             |
+| `AUTH_FACEBOOK_ID`, `AUTH_FACEBOOK_SECRET` | Meta app ID and app secret for Facebook Login                                                                        |
+| `DATABASE_URL`                             | Optional direct PostgreSQL connection for Prisma migrations and local use                                            |
+| `DATABASE_URL_POOLED`                      | Optional pooled PostgreSQL connection for runtime                                                                    |
+| `POSTGRES_PRISMA_URL`                      | Vercel Postgres Prisma-compatible pooled runtime connection                                                          |
+| `POSTGRES_URL`                             | Vercel Postgres connection fallback                                                                                  |
+| `POSTGRES_URL_NON_POOLING`                 | Vercel Postgres direct connection for Prisma migrations                                                              |
 
 Configure at least one complete credential pair. Google accepts an HTTP localhost callback during development. Use a dedicated Meta development app or a stable HTTPS staging origin for Facebook testing. Complete each provider’s publishing requirements with the site’s real privacy policy and, for Meta, a user-data deletion process before enabling public access. [Google provider setup](https://authjs.dev/getting-started/providers/google) · [Facebook provider setup](https://authjs.dev/getting-started/providers/facebook)
 
@@ -85,15 +85,15 @@ The guided scan uses MediaPipe pose landmarks and person masks on-device. It col
 
 The live panel updates from a rolling window of valid frames while the wearer holds a pose. Median aggregation and a spread gate reject unstable samples; the scan loop awaits each inference and discards results after camera shutdown. If the hold is interrupted, provisional readings clear. Review uses only evidence from completed holds. Voice guidance may announce newly available estimates, but does not read values aloud.
 
-| Live measurement | Required views and evidence | Optional refinement |
-| --- | --- | --- |
-| Shoulder breadth | Front view, visible shoulder landmarks, height or known-size reference calibration | None |
-| Sleeve length | Front view, shoulder/elbow/wrist landmarks, scale calibration | Back view can refine left/right path |
-| Arm length | Arms-extended view, both shoulder/wrist paths, scale calibration | None |
-| Chest circumference | Front and side silhouettes, torso landmarks, segmentation, matching scales | Back view corroborates front width |
-| Waist circumference | Front and side silhouettes, torso landmarks, segmentation, matching scales | Back view corroborates front width |
-| Hip circumference | Front and side silhouettes, torso landmarks, segmentation, matching scales | Back view corroborates front width |
-| Neck circumference | Side and relaxed-neck silhouettes, consistent scale | None |
+| Live measurement    | Required views and evidence                                                        | Optional refinement                  |
+| ------------------- | ---------------------------------------------------------------------------------- | ------------------------------------ |
+| Shoulder breadth    | Front view, visible shoulder landmarks, height or known-size reference calibration | None                                 |
+| Sleeve length       | Front view, shoulder/elbow/wrist landmarks, scale calibration                      | Back view can refine left/right path |
+| Arm length          | Arms-extended view, both shoulder/wrist paths, scale calibration                   | None                                 |
+| Chest circumference | Front and side silhouettes, torso landmarks, segmentation, matching scales         | Back view corroborates front width   |
+| Waist circumference | Front and side silhouettes, torso landmarks, segmentation, matching scales         | Back view corroborates front width   |
+| Hip circumference   | Front and side silhouettes, torso landmarks, segmentation, matching scales         | Back view corroborates front width   |
+| Neck circumference  | Side and relaxed-neck silhouettes, consistent scale                                | None                                 |
 
 These are dependencies of the current estimator, not a claim that the views are sufficient for validated tailoring accuracy. A measurement stays unavailable when the required landmarks, segmentation, scale, or repeatability checks fail. Preliminary readings use a stable current-frame window and are replaced by the completed-view report; subsequent optional views can refine them.
 
@@ -109,7 +109,21 @@ Collect prospective validation scans with consent. Include a representative rang
 
 Supply a JSON array with `anonymousId`, `predictedCm`, and `referenceCm`. Use the keys `arm`, `chest`, `sleeve`, `neck`, `waist`, and `hip`; omit any unsupported prediction and keep its tape reference. Optional `conditions` fields `device`, `clothing`, and `cameraAngle` can contain coarse labels. Run `node scripts/validate-measurements.mjs records.json` for bias, MAE, RMSE, 95th percentile absolute error, and coverage. Add one of `--by=device`, `--by=clothing`, or `--by=cameraAngle` to compare conditions. Use the error and coverage together before making accuracy claims.
 
-The estimator interface can accept a depth- or mesh-based method. Learned RGB shape models such as SHAPY are candidates for comparison, especially across clothing conditions. Methods that fit a body model from depth scans, such as MeasureXpert, would require different capture inputs. Evaluate either approach on held-out ContourStitch scans before using it for fit recommendations. The previous rotation and ONNX prototype is available for development at `/measure/experimental`. [SHAPY paper](https://openaccess.thecvf.com/content/CVPR2022/html/Choutas_Accurate_3D_Body_Shape_Regression_Using_Metric_and_Semantic_Attributes_CVPR_2022_paper.html) · [MeasureXpert paper](https://openaccess.thecvf.com/content/ICCV2025/html/Zhao_MeasureXpert_Automatic_Anthropometric_Measurement_Extraction_from_Two_Unregistered_Partial_Posed_ICCV_2025_paper.html)
+The estimator interface can accept a depth- or mesh-based method. Learned RGB shape models such as SHAPY are candidates for comparison, especially across clothing conditions. Methods that fit a body model from depth scans, such as MeasureXpert, would require different capture inputs. Evaluate either approach on held-out ContourStitch scans before using it for fit recommendations. [SHAPY paper](https://openaccess.thecvf.com/content/CVPR2022/html/Choutas_Accurate_3D_Body_Shape_Regression_Using_Metric_and_Semantic_Attributes_CVPR_2022_paper.html) · [MeasureXpert paper](https://openaccess.thecvf.com/content/ICCV2025/html/Zhao_MeasureXpert_Automatic_Anthropometric_Measurement_Extraction_from_Two_Unregistered_Partial_Posed_ICCV_2025_paper.html)
+
+### Experimental reconstruction comparison
+
+The **Compare experimental measurement engines** link under Measure opens `/measure/experimental`. It reuses the laptop RGB webcam turn capture and lets a user select the existing baseline or the independent browser-side visual-hull beta. The visual-hull path keeps only downsampled binary silhouettes in memory, asks for a known height as its scale anchor, supports 4, 8, 16, 32, or 64 requested angles, carves a bounded voxel grid, extracts exposed voxel faces as a mesh, and estimates chest/waist/hip cross-section perimeters. Its normalized projections assume a weak-perspective camera and relative turn angles; it does not estimate full camera intrinsics or a calibrated rotation axis. The mesh and circumferences are experimental geometric proxies, not validated measurements. No confidence interval is currently calibrated; the engine leaves uncertainty unavailable and asks users to confirm with a tape.
+
+**Parametric 3D Body Fitting — Beta** is a selectable but intentionally unavailable option. This repository does not include a PyTorch fitting service or body-model weights. Commercial deployment requires a separately licensed commercial model and a secured external inference service; research-only SMPL-family assets must not be used as if commercially licensed. No API URL, token, or service is configured, and the UI will not substitute or fabricate fitted measurements.
+
+The `/measure/benchmarks` research dashboard accepts a local JSON array with `id`, `engine`, `key`, `predictedCm`, `referenceCm`, `uncertaintyCm`, `latencyMs`, and `failed`; `viewCount` can be `4`, `8`, `16`, `32`, or `64` for angle-count ablations. The browser computes bias, MAE, RMSE, P95 absolute error, failure rate, average latency, and empirical interval coverage. The file is not uploaded or persisted. For reproducible SVG figures under `Figures/`, run:
+
+```sh
+node scripts/benchmark-reconstruction.mjs records.json
+```
+
+Only supplied records are measured; there are no bundled participant records or published accuracy results. The automated synthetic tests exercise basic geometry and input handling, but they are not a real-world tape validation, calibration-sensitivity, clothing/posture, repeatability, uncertainty-calibration, GPU, or memory benchmark. Collect a consented, de-identified, held-out tape dataset and report each engine separately before making accuracy or tailoring-readiness claims.
 
 ## Heritage Tailor theme
 
