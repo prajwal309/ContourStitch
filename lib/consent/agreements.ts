@@ -34,10 +34,7 @@ export const measurementAgreements = ['BODY_MEASUREMENT'] as const;
 export function isArchivedAgreement(type: Agreement) {
   return type === 'CAMERA' || type === 'ACCURACY';
 }
-export const registrationAgreements = [
-  ...measurementAgreements,
-  ...accountAgreements,
-] as const;
+export const registrationAgreements = accountAgreements;
 
 export type ConsentVersions = Partial<Record<Agreement, string>>;
 export type ConsentState = Partial<Record<Agreement, ConsentEvent>>;

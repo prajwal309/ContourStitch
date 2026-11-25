@@ -118,7 +118,7 @@ describe('server consent checks', () => {
   });
 });
 
-it('requires both registration choices and each current version without making improvement consent mandatory', () => {
+it('requires account agreements at registration without requiring measurement consent', () => {
   const form = new FormData();
   for (const type of registrationAgreements)
     form.set(`version-${type}`, agreements[type].version);
@@ -127,15 +127,11 @@ it('requires both registration choices and each current version without making i
   );
   form.set('ACCOUNT', 'on');
   expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
-    false,
-  );
-  form.set('BODY_MEASUREMENT', 'on');
-  expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
     true,
   );
   form.set('version-BODY_MEASUREMENT', 'stale');
   expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
-    false,
+    true,
   );
 });
 

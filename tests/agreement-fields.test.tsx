@@ -5,20 +5,22 @@ import {
   RegistrationAgreementFields,
 } from '@/components/consent/AgreementFields';
 
-it('uses one required measurement checkbox at registration and an unchecked independent opt-in', () => {
+it('requires account agreements at registration without requesting measurement consent', () => {
   render(<RegistrationAgreementFields />);
   const required = within(
     screen.getByRole('group', { name: 'Required agreements' }),
   );
   const checkbox = required.getByRole('checkbox', {
-    name: 'I agree to the Body Measurement Consent & Accuracy Policy.',
+    name: 'I agree to the Terms of Service and acknowledge the Privacy Policy.',
   });
-  expect(required.getAllByRole('checkbox')).toHaveLength(2);
-  expect(checkbox).toHaveAccessibleName(
-    'I agree to the Body Measurement Consent & Accuracy Policy.',
-  );
+  expect(required.getAllByRole('checkbox')).toHaveLength(1);
   expect(checkbox).toBeRequired();
   expect(checkbox).not.toBeChecked();
+  expect(
+    required.queryByRole('checkbox', {
+      name: 'I agree to the Body Measurement Consent & Accuracy Policy.',
+    }),
+  ).not.toBeInTheDocument();
   expect(
     required.getByRole('link', { name: /Terms of Service/ }),
   ).toHaveAttribute('target', '_blank');

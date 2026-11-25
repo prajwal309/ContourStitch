@@ -136,7 +136,6 @@ export function RegistrationAgreementFields() {
             <label htmlFor="registration-consent">.</label>
           </div>
         </div>
-        <BodyMeasurementAgreement />
       </fieldset>
       <fieldset className="agreement-options">
         <legend>Optional consent</legend>

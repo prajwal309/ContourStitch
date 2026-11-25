@@ -6,7 +6,6 @@ import {
   agreements,
   accountAgreements,
   activeAgreementTypes,
-  measurementAgreements,
   currentAcceptance,
   missingAgreements,
   type Agreement,
@@ -55,7 +54,6 @@ export function registrationEvents(improvement: boolean) {
   const now = new Date();
   return [
     ...accountAgreements.map((type) => acceptance(type, now)),
-    ...measurementAgreements.map((type) => acceptance(type, now)),
     improvement
       ? acceptance('IMPROVEMENT', now)
       : {
