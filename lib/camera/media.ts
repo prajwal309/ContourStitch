@@ -17,7 +17,7 @@ export async function requestCamera(
 export function cameraError(error: unknown) {
   if (error && typeof error === 'object' && 'name' in error) {
     if ('message' in error && error.message === 'UNSUPPORTED')
-      return 'This browser cannot access a camera. Open this page over HTTPS in Safari or Chrome, or enter tape measurements.';
+      return 'This browser cannot access a camera. Open this page over HTTPS in Safari or Chrome, or enter measurements manually.';
     if (
       error.name === 'MeasurementConsentError' &&
       'message' in error &&
@@ -25,11 +25,11 @@ export function cameraError(error: unknown) {
     )
       return error.message;
     if (error.name === 'NotAllowedError' || error.name === 'SecurityError')
-      return 'Camera permission was denied. Allow camera access in your browser settings, then try again. You can also enter tape measurements.';
+      return 'Camera permission was denied. Allow camera access in your browser settings, then try again. You can also enter measurements manually.';
     if (error.name === 'NotFoundError')
-      return 'No camera was found. Connect a camera or enter tape measurements.';
+      return 'No camera was found. Connect a camera or enter measurements manually.';
     if (error.name === 'NotReadableError')
       return 'Your camera is busy. Close other camera apps and try again.';
   }
-  return 'The camera or on-device model could not start. Try again, or enter tape measurements.';
+  return 'The camera or on-device model could not start. Try again, or enter measurements manually.';
 }

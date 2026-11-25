@@ -117,7 +117,7 @@ export function OutfitForm({
           {matches.fromProfile.length} of {product.requirements.length}{' '}
           dimensions from your saved profile.{' '}
           {matches.missing.length
-            ? 'Add the remaining details by tape.'
+            ? 'Enter the remaining measurements manually.'
             : 'Confirm your measurements with a tape before production.'}
         </p>
         {!!matches.fromProfile.length && (

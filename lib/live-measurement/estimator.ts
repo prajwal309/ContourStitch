@@ -27,6 +27,7 @@ export type SampleQuality = {
 };
 export type Sample = {
   scale: number;
+  resolutionCm?: number;
   widths: Partial<Record<Dimension, number>>;
   arms?: Sides;
   shoulder?: number;
@@ -114,11 +115,12 @@ function armCrossesRow(
   );
 }
 
-function uncontaminatedWidth(
+export function uncontaminatedWidth(
   frame: VisionFrame,
   row: number,
   centerX: number,
   checkArms: boolean,
+  edgeMargin = 0,
 ) {
   const mask = frame.mask;
   if (!mask) return null;
@@ -132,7 +134,11 @@ function uncontaminatedWidth(
     const y = rowPixel + delta;
     const span = rowSpan(mask, y, centerX * mask.width);
     if (
+      y >= mask.height * edgeMargin &&
+      y < mask.height * (1 - edgeMargin) &&
       span &&
+      span.left >= mask.width * edgeMargin &&
+      span.right < mask.width * (1 - edgeMargin) &&
       (!checkArms ||
         !armCrossesRow(
           frame,
@@ -147,11 +153,12 @@ function uncontaminatedWidth(
   return widths.length >= imageConfig.minSampleRows ? median(widths) : null;
 }
 
-function neckWidth(
+export function neckWidth(
   frame: VisionFrame,
   shoulderY: number,
   torsoX: number,
   torsoHeight: number,
+  edgeMargin = 0,
 ) {
   const ears = [frame.landmarks[7], frame.landmarks[8]].filter(usable);
   if (!ears.length) return null;
@@ -165,12 +172,14 @@ function neckWidth(
     earY + band * c.neckSamplingFraction,
     (earX + torsoX) / 2,
     false,
+    edgeMargin,
   );
   const upperTorso = uncontaminatedWidth(
     frame,
     shoulderY + torsoHeight * imageConfig.sampleFractions.chest,
     torsoX,
     false,
+    edgeMargin,
   );
   return neck && upperTorso && neck < upperTorso ? neck : null;
 }
@@ -259,7 +268,9 @@ function sample(
   );
   if (!cmPerPixel) return null;
 
+  const maskToCm = (cmPerPixel * frame.width) / mask.width;
   const evidence: Sample = {
+    resolutionCm: Math.max(cmPerPixel, maskToCm),
     scale: bounds.height / mask.height,
     widths: {},
     quality: sampleQuality(frame, bounds, pose, calibration),
@@ -279,7 +290,6 @@ function sample(
   const torso = torsoAnchors(frame);
   if (!torso) return evidence;
   const torsoHeight = torso.to - torso.from;
-  const maskToCm = (cmPerPixel * frame.width) / mask.width;
   if (pose === 'front' || pose === 'back')
     evidence.torsoCm = torsoHeight * cmPerPixel;
 
@@ -406,14 +416,14 @@ function report(
     'arm',
     arm ? (arm.left + arm.right) / 2 : null,
     'Bilateral straight shoulder joint to wrist distance with arms extended',
-    'Needs a clear, stable arms-extended pose. You can enter it with a tape.',
+    'Needs a clear, stable arms-extended pose. You can enter it manually.',
     arm,
   );
   add(
     'sleeve',
     sleeve ? (sleeve.left + sleeve.right) / 2 : null,
     'Shoulder landmark to wrist following the elbow. The shoulder landmark approximates the sleeve starting point.',
-    'Needs a stable shoulder, elbow and wrist path. You can enter it with a tape.',
+    'Needs a stable shoulder, elbow and wrist path. You can enter it manually.',
     sleeve,
   );
 

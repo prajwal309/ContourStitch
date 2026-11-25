@@ -4,14 +4,9 @@ const activeDocuments = [
   { slug: 'terms', title: 'Terms of Service', version: '2' },
   { slug: 'privacy', title: 'Privacy Policy', version: '5' },
   {
-    slug: 'body-measurement-consent',
-    title: 'Body Measurement Consent',
-    version: '3',
-  },
-  {
-    slug: 'measurement-accuracy',
-    title: 'Measurement Accuracy Disclaimer',
-    version: '3',
+    slug: 'body-measurement-policy',
+    title: 'Body Measurement Consent & Accuracy Policy',
+    version: '1',
   },
   {
     slug: 'measurement-data-improvement',
@@ -33,7 +28,9 @@ test('serves versioned draft legal documents with dates and cross-links', async 
     );
     await expect(page.locator('.legal-version time')).toHaveAttribute(
       'dateTime',
-      document.slug === 'privacy' ? '2026-11-25' : '2026-11-24',
+      ['privacy', 'body-measurement-policy'].includes(document.slug)
+        ? '2026-11-25'
+        : '2026-11-24',
     );
     await expect(page.locator('.legal-version')).toContainText(
       'Draft pending legal review',
@@ -62,4 +59,22 @@ test('serves versioned draft legal documents with dates and cross-links', async 
   await expect(page.locator('.legal-version')).toContainText(
     'Draft pending legal review',
   );
+});
+
+test('redirects old entry points and keeps the versioned agreements readable', async ({
+  page,
+}) => {
+  for (const slug of ['body-measurement-consent', 'measurement-accuracy']) {
+    await page.goto(`/legal/${slug}`);
+    await expect(page).toHaveURL(/body-measurement-policy\/1$/);
+    await page.goto(`/legal/${slug}/3`);
+    await expect(page.locator('.legal-version')).toContainText('Version 3');
+    await expect(
+      page
+        .getByRole('navigation', { name: 'Other legal documents' })
+        .getByRole('link', {
+          name: 'Body Measurement Consent & Accuracy Policy',
+        }),
+    ).toBeVisible();
+  }
 });

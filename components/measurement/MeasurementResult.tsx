@@ -1,4 +1,5 @@
 'use client';
+import { measurementCopy } from '@/lib/measurement/copy';
 import { useState, type ReactNode } from 'react';
 import { Pencil, ShieldCheck, Save, Trash2 } from 'lucide-react';
 import {
@@ -135,14 +136,14 @@ export function MeasurementResult({
                         </span>
                         <span className={`confidence ${estimate.confidence}`}>
                           {manual
-                            ? 'Tape entry'
+                            ? measurementCopy.manual
                             : `Model confidence: ${estimate.confidence}`}
                         </span>
                       </div>
                       {estimate.uncertaintyCm === null && (
                         <p className="muted">
                           No validated uncertainty interval is assigned to this
-                          {manual ? ' tape entry.' : ' estimate.'}
+                          {manual ? ' manual entry.' : ' estimate.'}
                         </p>
                       )}
                       {estimate.sidesCm && (
@@ -159,7 +160,7 @@ export function MeasurementResult({
                       )}
                       <details>
                         <summary>How this was measured</summary>
-                        <p>{estimate.method}</p>
+                        <p>{manual ? 'Entered manually.' : estimate.method}</p>
                         {original && (
                           <p>
                             Original estimate{' '}
@@ -181,7 +182,7 @@ export function MeasurementResult({
                       <p className="unavailable">Not estimated</p>
                       <p className="muted">
                         {report.missing[key] ??
-                          'Enter this measurement from a tape.'}
+                          'Enter this measurement manually.'}
                       </p>
                     </>
                   )}

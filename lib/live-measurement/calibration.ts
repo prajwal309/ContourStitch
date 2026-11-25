@@ -1,7 +1,12 @@
 import { validHeight } from '@/lib/measurement/units';
 import { liveConfig } from './config';
 
-export type Calibration = { kind: 'height' | 'reference'; heightCm: number };
+export type Calibration = {
+  kind: 'height' | 'reference';
+  heightCm: number;
+  /** Direct metric segment lengths from an object in the subject's plane. */
+  anchorCm?: Partial<Record<'torso' | 'thigh', number>>;
+};
 
 /** A vertical segment in the same frontal plane as a standing subject estimates stature for later views. */
 export function calibrateReference(

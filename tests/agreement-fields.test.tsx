@@ -5,15 +5,17 @@ import {
   RegistrationAgreementFields,
 } from '@/components/consent/AgreementFields';
 
-it('uses one required registration checkbox and an unchecked independent opt-in', () => {
+it('uses one required measurement checkbox at registration and an unchecked independent opt-in', () => {
   render(<RegistrationAgreementFields />);
   const required = within(
-    screen.getByRole('group', { name: 'Required agreement' }),
+    screen.getByRole('group', { name: 'Required agreements' }),
   );
-  const [checkbox] = required.getAllByRole('checkbox');
-  expect(required.getAllByRole('checkbox')).toHaveLength(1);
+  const checkbox = required.getByRole('checkbox', {
+    name: 'I agree to the Body Measurement Consent & Accuracy Policy.',
+  });
+  expect(required.getAllByRole('checkbox')).toHaveLength(2);
   expect(checkbox).toHaveAccessibleName(
-    'I agree to the Terms of Service, acknowledge the Privacy Policy, and consent to camera-based body measurement processing. I understand that measurements are estimates.',
+    'I agree to the Body Measurement Consent & Accuracy Policy.',
   );
   expect(checkbox).toBeRequired();
   expect(checkbox).not.toBeChecked();
@@ -31,9 +33,9 @@ it('uses one required registration checkbox and an unchecked independent opt-in'
 });
 
 it('keeps separate capture consent beside the camera agreement link', () => {
-  render(<AgreementFields types={['CAMERA', 'ACCURACY']} />);
+  render(<AgreementFields types={['BODY_MEASUREMENT']} />);
   const checkbox = screen.getByRole('checkbox', {
-    name: 'I consent to camera-based body measurement processing.',
+    name: 'I agree to the Body Measurement Consent & Accuracy Policy.',
   });
   expect(checkbox).toBeRequired();
   expect(checkbox.closest('.consent-with-agreement')).toContainElement(

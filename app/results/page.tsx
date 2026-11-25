@@ -1,5 +1,6 @@
 'use client';
 
+import { measurementCopy } from '@/lib/measurement/copy';
 import Link from 'next/link';
 import { useSession } from '@/components/SessionProvider';
 import { MeasurementResult } from '@/components/measurement/MeasurementResult';
@@ -18,10 +19,10 @@ export default function Results() {
         </h1>
         {!report && (
           <p>
-            No current scan estimates. Enter tape measurements below, load a
-            saved profile, or{' '}
+            No current scan estimates. Enter measurements manually below, load a
+            saved profile, or try{' '}
             <Link href="/measure" className="inline-link">
-              start a guided video scan
+              {measurementCopy.camera}
             </Link>
             .
           </p>

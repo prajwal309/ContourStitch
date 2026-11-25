@@ -11,6 +11,11 @@ export const agreements = {
     title: 'Measurement Accuracy Disclaimer',
     version: '3',
   },
+  BODY_MEASUREMENT: {
+    slug: 'body-measurement-policy',
+    title: 'Body Measurement Consent & Accuracy Policy',
+    version: '1',
+  },
   IMPROVEMENT: {
     slug: 'measurement-data-improvement',
     title: 'Optional Measurement Data Use',
@@ -21,9 +26,16 @@ export const agreements = {
 export type Agreement = keyof typeof agreements;
 export const agreementTypes = Object.keys(agreements) as Agreement[];
 export const accountAgreements = ['TERMS', 'PRIVACY'] as const;
-export const cameraAgreements = ['CAMERA', 'ACCURACY'] as const;
+export const activeAgreementTypes = agreementTypes.filter(
+  (type) => !isArchivedAgreement(type),
+);
+export const measurementAgreements = ['BODY_MEASUREMENT'] as const;
+
+export function isArchivedAgreement(type: Agreement) {
+  return type === 'CAMERA' || type === 'ACCURACY';
+}
 export const registrationAgreements = [
-  ...cameraAgreements,
+  ...measurementAgreements,
   ...accountAgreements,
 ] as const;
 
@@ -58,12 +70,6 @@ export function missingAgreements(
   return required.filter((type) => !currentAcceptance(state, type));
 }
 
-export function measurementAgreementsToConfirm(state: ConsentState) {
-  return cameraAgreements.filter(
-    (type) => type === 'CAMERA' || !currentAcceptance(state, type),
-  );
-}
-
 export function matchesVersions(
   versions: ConsentVersions,
   required: readonly Agreement[],
@@ -80,13 +86,7 @@ export function validRegistrationVersions(versions: ConsentVersions) {
 }
 
 export function checkedRegistrationVersions(form: FormData): ConsentVersions {
-  const versions = checkedVersions(form, ['IMPROVEMENT']);
-  if (form.get('REGISTRATION') !== 'on') return versions;
-  for (const type of registrationAgreements) {
-    const version = form.get(`version-${type}`);
-    if (typeof version === 'string') versions[type] = version;
-  }
-  return versions;
+  return checkedVersions(form, [...registrationAgreements, 'IMPROVEMENT']);
 }
 
 export function checkedVersions(

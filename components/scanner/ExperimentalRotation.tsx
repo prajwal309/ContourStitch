@@ -1,4 +1,5 @@
 'use client';
+import { measurementCopy } from '@/lib/measurement/copy';
 import { useState } from 'react';
 import Link from 'next/link';
 import { HeightForm } from '@/components/measurement/HeightForm';
@@ -147,7 +148,7 @@ export default function ExperimentalRotation({
               label="Continue →"
             />
             <Link className="text-button" href="/measure">
-              Use the guided video session
+              {measurementCopy.camera}
             </Link>
           </>
         ) : step === 'height' ? (

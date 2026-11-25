@@ -31,6 +31,15 @@ const nextConfig: NextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
         ],
       },
+      {
+        source: '/models/quaternius-female/mannequin-v1.bin',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
       ...['/sign-in', '/my-measurements', '/account'].map((source) => ({
         source,
         headers: [

@@ -8,17 +8,18 @@ export const acquisitionMilestones = [10, 25, 50, 75, 90, 100] as const;
 
 export function acquisitionProgress(
   estimates: readonly { key: MeasurementKey }[],
+  supported: readonly MeasurementKey[] = liveMeasurementKeys,
 ) {
   const acquired = new Set(
-    estimates
-      .map(({ key }) => key)
-      .filter((key) => liveMeasurementKeys.some((liveKey) => liveKey === key)),
+    estimates.map(({ key }) => key).filter((key) => supported.includes(key)),
   );
   const count = acquired.size;
   return {
     count,
-    total: liveMeasurementKeys.length,
-    percent: Math.round((count / liveMeasurementKeys.length) * 100),
+    total: supported.length,
+    percent: supported.length
+      ? Math.round((count / supported.length) * 100)
+      : 0,
   };
 }
 

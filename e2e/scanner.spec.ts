@@ -85,10 +85,9 @@ for (const debug of [false, true])
       await page.getByLabel('Silhouette views').selectOption('4');
     }
     await page
-      .getByRole('checkbox', { name: /I consent to camera-based/ })
-      .check();
-    await page
-      .getByRole('checkbox', { name: /measurements are estimates/ })
+      .getByRole('checkbox', {
+        name: /^I agree to the Body Measurement Consent/,
+      })
       .check();
     await page.getByRole('button', { name: 'Continue →' }).click();
     await page.getByRole('button', { name: 'Continue to video scan' }).click();
@@ -146,10 +145,7 @@ test('permission denial offers restart and closes cleanly', async ({
   );
   await page.goto('/measure/experimental');
   await page
-    .getByRole('checkbox', { name: /I consent to camera-based/ })
-    .check();
-  await page
-    .getByRole('checkbox', { name: /measurements are estimates/ })
+    .getByRole('checkbox', { name: /^I agree to the Body Measurement Consent/ })
     .check();
   await page.getByRole('button', { name: 'Continue →' }).click();
   await page.getByRole('button', { name: 'Continue to video scan' }).click();

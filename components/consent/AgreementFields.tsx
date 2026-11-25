@@ -1,7 +1,8 @@
+import { useId } from 'react';
 import {
   agreementPath,
   agreements,
-  registrationAgreements,
+  accountAgreements,
   type Agreement,
 } from '@/lib/consent/agreements';
 
@@ -33,52 +34,22 @@ export function AgreementFields({ types }: { types: readonly Agreement[] }) {
       {types.length > 0 && (
         <fieldset className="agreement-options">
           <legend>Required agreements</legend>
-          <p className="muted">
-            Documents open in a new tab so you can keep your place.
-          </p>
-          {types.map((type) => (
-            <input
-              key={type}
-              type="hidden"
-              name={`version-${type}`}
-              value={agreements[type].version}
-            />
-          ))}
-          {types.includes('CAMERA') && (
-            <div className="consent consent-with-agreement">
-              <input
-                id="camera-body-measurement-consent"
-                type="checkbox"
-                name="CAMERA"
-                required
-              />
-              <div>
-                <label htmlFor="camera-body-measurement-consent">
-                  I consent to camera-based body measurement processing.
-                </label>{' '}
-                (
-                <AgreementLink type="CAMERA" />)
-              </div>
-            </div>
+          {account && (
+            <p className="muted">
+              Documents open in a new tab so you can keep your place.
+            </p>
           )}
-          {types.includes('ACCURACY') && (
-            <div className="consent consent-with-agreement">
+          {types
+            .filter((type) => type !== 'BODY_MEASUREMENT')
+            .map((type) => (
               <input
-                id="measurement-accuracy-consent"
-                type="checkbox"
-                name="ACCURACY"
-                required
+                key={type}
+                type="hidden"
+                name={`version-${type}`}
+                value={agreements[type].version}
               />
-              <div>
-                <label htmlFor="measurement-accuracy-consent">
-                  I understand that measurements are estimates and may contain
-                  errors.
-                </label>{' '}
-                (
-                <AgreementLink type="ACCURACY" />)
-              </div>
-            </div>
-          )}
+            ))}
+          {types.includes('BODY_MEASUREMENT') && <BodyMeasurementAgreement />}
           {account && (
             <div className="consent consent-with-agreement">
               <input
@@ -107,15 +78,41 @@ export function AgreementFields({ types }: { types: readonly Agreement[] }) {
   );
 }
 
-const registrationLabel =
-  'I agree to the Terms of Service, acknowledge the Privacy Policy, and consent to camera-based body measurement processing. I understand that measurements are estimates.';
+export const bodyMeasurementAgreementLabel = `I agree to the ${agreements.BODY_MEASUREMENT.title}.`;
+
+export function BodyMeasurementAgreement() {
+  const id = useId();
+  return (
+    <div className="consent consent-with-agreement">
+      <input
+        type="hidden"
+        name="version-BODY_MEASUREMENT"
+        value={agreements.BODY_MEASUREMENT.version}
+      />
+      <input
+        id={id}
+        type="checkbox"
+        name="BODY_MEASUREMENT"
+        aria-label={bodyMeasurementAgreementLabel}
+        required
+      />
+      <div>
+        <label htmlFor={id}>I agree to the </label>
+        <strong>
+          <AgreementLink type="BODY_MEASUREMENT" />
+        </strong>
+        <label htmlFor={id}>.</label>
+      </div>
+    </div>
+  );
+}
 
 export function RegistrationAgreementFields() {
   return (
     <>
       <fieldset className="agreement-options">
-        <legend>Required agreement</legend>
-        {registrationAgreements.map((type) => (
+        <legend>Required agreements</legend>
+        {accountAgreements.map((type) => (
           <input
             key={type}
             type="hidden"
@@ -127,21 +124,19 @@ export function RegistrationAgreementFields() {
           <input
             id="registration-consent"
             type="checkbox"
-            name="REGISTRATION"
-            aria-label={registrationLabel}
+            name="ACCOUNT"
+            aria-label="I agree to the Terms of Service and acknowledge the Privacy Policy."
             required
           />
           <div>
             <label htmlFor="registration-consent">I agree to the </label>
             <AgreementLink type="TERMS" />
-            <label htmlFor="registration-consent">, acknowledge the </label>
+            <label htmlFor="registration-consent"> and acknowledge the </label>
             <AgreementLink type="PRIVACY" />
-            <label htmlFor="registration-consent">
-              , and consent to camera-based body measurement processing. I
-              understand that measurements are estimates.
-            </label>
+            <label htmlFor="registration-consent">.</label>
           </div>
         </div>
+        <BodyMeasurementAgreement />
       </fieldset>
       <fieldset className="agreement-options">
         <legend>Optional consent</legend>

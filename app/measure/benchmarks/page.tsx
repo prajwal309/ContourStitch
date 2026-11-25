@@ -1,5 +1,8 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
 import { BenchmarkDashboard } from '@/components/reconstruction/BenchmarkDashboard';
 
 export const metadata: Metadata = {
@@ -8,6 +11,7 @@ export const metadata: Metadata = {
 };
 
 export default function BenchmarksPage() {
+  if (process.env.NODE_ENV === 'production') redirect('/measure');
   return (
     <main id="main" className="flow">
       <section className="flow-card benchmark-card">

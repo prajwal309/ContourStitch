@@ -1,3 +1,4 @@
+import { measurementCopy } from '@/lib/measurement/copy';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -191,20 +192,26 @@ export default function Home() {
       >
         <div className="landing-shell landing-passport-grid">
           <div className="landing-section-heading">
-            <p className="landing-kicker">Your measurements, ready to reuse</p>
-            <h2 id="landing-passport-title">Digital Fit Passport.</h2>
-            <p>
-              Save a private fit profile, edit measurements when they change,
-              and review earlier versions in your account. Save on this device
-              for quick access or sign in to open your profile across devices.
+            <p className="landing-kicker passport-kicker">
+              Your fit. Always with you.
+            </p>
+            <h2 id="landing-passport-title">Digital Fit Passport</h2>
+            <p className="passport-description">
+              Your measurements, saved on this device or in your private account
+              and ready to reuse. Update your fit profile as your body changes
+              and access it whenever you need it.
             </p>
             <Link
               href="/my-measurements"
               prefetch={false}
-              className="landing-button"
+              className="landing-button passport-action"
             >
-              Open My Fit Profile <ArrowUpRight size={18} aria-hidden="true" />
+              View My Fit Passport <ArrowRight size={18} aria-hidden="true" />
             </Link>
+            <p className="passport-privacy">
+              <LockKeyhole size={15} strokeWidth={1.7} aria-hidden="true" />
+              <span>Private by design. Always under your control.</span>
+            </p>
           </div>
           <FitPassport />
         </div>
@@ -233,7 +240,7 @@ export default function Home() {
               <ArrowUpRight size={16} aria-hidden="true" />
             </Link>
             <Link href="/results" className="landing-inline">
-              Enter tape measurements{' '}
+              {measurementCopy.manualOption}{' '}
               <ArrowRight size={16} aria-hidden="true" />
             </Link>
           </div>

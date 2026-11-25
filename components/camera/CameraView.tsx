@@ -1,4 +1,5 @@
 'use client';
+import { measurementCopy } from '@/lib/measurement/copy';
 import { useEffect, useRef, useState } from 'react';
 import { SwitchCamera, Camera } from 'lucide-react';
 import { requestCamera, releaseCamera, cameraError } from '@/lib/camera/media';
@@ -290,7 +291,7 @@ function LiveCamera({
         </>
       )}
       <button className="text-button" onClick={onManual}>
-        Enter tape measurements instead
+        {measurementCopy.enterManually}
       </button>
     </div>
   );

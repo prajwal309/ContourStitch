@@ -24,7 +24,7 @@ test('guest can save and reload measurements locally', async ({ page }) => {
   await expect(
     page.getByText('Saved measurements loaded from this device.'),
   ).toBeVisible();
-  await expect(page.getByText('Tape entry', { exact: true })).toBeVisible();
+  await expect(page.getByText('Manual Entry', { exact: true })).toBeVisible();
 
   await page.goto('/my-measurements');
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
@@ -58,7 +58,7 @@ async function checkRegistration(page: Page, optional = false) {
     await expect(checkbox).not.toBeChecked();
   }
   for (const checkbox of await page
-    .getByRole('group', { name: 'Required agreement' })
+    .getByRole('group', { name: 'Required agreements' })
     .getByRole('checkbox')
     .all()) {
     await checkbox.check();
@@ -219,7 +219,10 @@ test('OAuth linking, private cloud profiles, and expired sessions', async ({
       'Connect Facebook',
     );
     await expect(page.getByText('Facebook connected')).toBeVisible();
+    // The OAuth callback loads a fresh document. Wait for the account form to hydrate.
+    await page.waitForLoadState('networkidle');
     await page.getByRole('button', { name: 'Sign out' }).click();
+    await expect(page).toHaveURL(/\/$/);
     await page.goto('/my-measurements');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 
@@ -677,12 +680,12 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     const user = await db.user.findUniqueOrThrow({ where: { email } });
     const where = { userId: user.id };
     const initial = await db.consentEvent.findMany({ where });
-    expect(initial).toHaveLength(5);
+    expect(initial).toHaveLength(4);
     expect(
       initial.filter(
         ({ status, acceptedAt }) => status === 'ACCEPTED' && acceptedAt,
       ),
-    ).toHaveLength(4);
+    ).toHaveLength(3);
     expect(initial.find(({ type }) => type === 'IMPROVEMENT')).toMatchObject({
       status: 'DECLINED',
       acceptedAt: null,
@@ -711,10 +714,42 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     ]);
     expect(history[2].acceptedAt).toEqual(history[1].acceptedAt);
     expect(history[2].revokedAt).toBeInstanceOf(Date);
-    await page.getByRole('button', { name: 'Withdraw camera consent' }).click();
+    await page
+      .getByRole('button', { name: 'Withdraw measurement consent' })
+      .click();
     await expect(
-      page.getByRole('button', { name: 'Withdraw camera consent' }),
+      page.getByRole('button', { name: 'Withdraw measurement consent' }),
     ).toHaveCount(0);
+    await db.consentEvent.createMany({
+      data: (['CAMERA', 'ACCURACY'] as const).map((type) => ({
+        ...where,
+        type,
+        status: 'ACCEPTED',
+        agreementVersion: '3',
+        acceptedAt: new Date(),
+      })),
+    });
+    await page.reload();
+    await expect(
+      page.getByRole('button', { name: 'Save measurement consent' }),
+    ).toBeVisible();
+    await page
+      .getByText('Previously accepted versions', { exact: true })
+      .click();
+    await expect(
+      page.getByRole('link', { name: /^Body Measurement Consent · Version 3/ }),
+    ).toHaveAttribute('href', '/legal/body-measurement-consent/3');
+    await page
+      .getByRole('checkbox', {
+        name: 'I agree to the Body Measurement Consent & Accuracy Policy.',
+      })
+      .check();
+    await page
+      .getByRole('button', { name: 'Save measurement consent' })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Withdraw measurement consent' }),
+    ).toBeVisible();
     await page.goto('/measure/experimental');
     await page.getByRole('button', { name: 'Continue →' }).click();
     await expect(
@@ -723,7 +758,9 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     expect(await readCameraCalls()).toBe(0);
     await page.goto('/measure');
     await expect(
-      page.getByRole('checkbox', { name: /I consent to camera/ }),
+      page.getByRole('checkbox', {
+        name: /^I agree to the Body Measurement Consent/,
+      }),
     ).not.toBeChecked();
     await expect(
       page.getByRole('checkbox', { name: /measurements are estimates/ }),
@@ -733,7 +770,11 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
       page.getByRole('button', { name: /Start guided video/ }),
     ).toHaveCount(0);
     expect(await readCameraCalls()).toBe(0);
-    await page.getByRole('checkbox', { name: /I consent to camera/ }).check();
+    await page
+      .getByRole('checkbox', {
+        name: /^I agree to the Body Measurement Consent/,
+      })
+      .check();
     await page.getByRole('button', { name: /Continue privately/ }).click();
     await page.getByRole('button', { name: /Start guided video/ }).click();
     await expect(page.getByText(/Camera permission was denied/)).toBeVisible();

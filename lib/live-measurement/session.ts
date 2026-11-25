@@ -58,6 +58,7 @@ export class GuidedScan {
         provisional ?? report,
         samples,
         complete,
+        report,
       ),
     };
   }
@@ -115,7 +116,7 @@ export class GuidedScan {
     if (pose.id === 'neck' && !evidence.widths.neck) {
       this.clearHold();
       return this.snapshot(
-        'Keep your head upright and move hair or clothing clear of your neckline. If needed, enter this measurement with a tape instead.',
+        'Keep your head upright and move hair or clothing clear of your neckline. If needed, enter this measurement manually.',
       );
     }
 

@@ -8,7 +8,7 @@ describe('experimental engine selection', () => {
   it('discloses that parametric fitting is unavailable without its licensed runtime', () => {
     render(
       <ExperimentalRotation
-        access={{ userId: null, required: ['CAMERA', 'ACCURACY'] }}
+        access={{ userId: null, required: ['BODY_MEASUREMENT'] }}
       />,
     );
     const parametric = screen.getByRole('radio', {
@@ -20,19 +20,11 @@ describe('experimental engine selection', () => {
       /commercial model license and PyTorch inference service/,
     );
     const cameraConsent = screen.getByLabelText(
-      'I consent to camera-based body measurement processing.',
+      'I agree to the Body Measurement Consent & Accuracy Policy.',
     );
     const consent = cameraConsent.closest('.consent-with-agreement');
     expect(consent).toContainElement(
       screen.getByRole('link', { name: /Body Measurement Consent/ }),
-    );
-    const accuracyConsent = screen.getByLabelText(
-      'I understand that measurements are estimates and may contain errors.',
-    );
-    expect(accuracyConsent.closest('.consent-with-agreement')).toContainElement(
-      screen.getByRole('link', {
-        name: /Measurement Accuracy Disclaimer/,
-      }),
     );
     fireEvent.click(cameraConsent);
     expect(screen.getByRole('button', { name: 'Continue →' })).toBeDisabled();
@@ -41,7 +33,7 @@ describe('experimental engine selection', () => {
   it('exposes view-count ablations for the independent visual hull', () => {
     render(
       <ExperimentalRotation
-        access={{ userId: null, required: ['CAMERA', 'ACCURACY'] }}
+        access={{ userId: null, required: ['BODY_MEASUREMENT'] }}
       />,
     );
     fireEvent.click(

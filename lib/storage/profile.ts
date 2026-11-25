@@ -108,8 +108,9 @@ export function sanitizeProfile(input: unknown): LocalProfile | null {
     version: 1,
     unit: value.unit,
     report: {
-      ...(value.report.source === 'live-video' && {
-        source: 'live-video' as const,
+      ...((value.report.source === 'live-video' ||
+        value.report.source === 'progressive-video') && {
+        source: value.report.source,
       }),
       estimates,
       missing,

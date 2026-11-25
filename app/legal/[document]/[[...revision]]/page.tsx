@@ -1,9 +1,11 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import {
+  activeAgreementTypes,
   agreementPath,
   agreements,
   agreementTypes,
+  isArchivedAgreement,
 } from '@/lib/consent/agreements';
 import { documentLastUpdated, documents } from '@/lib/consent/documents';
 
@@ -12,6 +14,8 @@ type Params = { document: string; revision?: string[] };
 function findDocument({ document, revision = [] }: Params) {
   const type = agreementTypes.find((key) => agreements[key].slug === document);
   if (!type || revision.length > 1) notFound();
+  if (!revision[0] && isArchivedAgreement(type))
+    redirect(agreementPath('BODY_MEASUREMENT'));
   const agreement = agreements[type];
   const version = revision[0] ?? agreement.version;
   if (!Object.hasOwn(documents[type], version)) notFound();
@@ -78,7 +82,7 @@ export default async function LegalDocument({
         ))}
         <nav aria-label="Other legal documents">
           <ul>
-            {agreementTypes
+            {activeAgreementTypes
               .filter((key) => key !== type)
               .map((key) => (
                 <li key={key}>

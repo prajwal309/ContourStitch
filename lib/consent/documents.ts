@@ -220,7 +220,7 @@ export const documents: Record<Agreement, Record<string, Document>> = {
       },
       {
         title: 'Related documents and unresolved terms',
-        text: 'The Privacy Policy describes information handling, and the Body Measurement Consent and Measurement Accuracy Disclaimer explain camera processing and measurement limitations. This draft does not select a governing jurisdiction, company address, formal notice process, or privacy contact. Those terms require review by qualified counsel for the places where the service will operate.',
+        text: 'The Privacy Policy describes information handling, and the Body Measurement Consent & Accuracy Policy explains camera processing and measurement limitations. This draft does not select a governing jurisdiction, company address, formal notice process, or privacy contact. Those terms require review by qualified counsel for the places where the service will operate.',
       },
     ],
   },
@@ -246,6 +246,23 @@ export const documents: Record<Agreement, Record<string, Document>> = {
         title: 'Password screening and recovery',
         text: 'When you create or reset a password, the server checks publicly documented breach data using Have I Been Pwned. The request sends only the first five characters of a SHA-1 password hash, without your username, full hash, or password. We store passwords as salted scrypt hashes. If you create a one-time recovery code, we store its hash and remove it when you use or replace the code. A password reset ends existing ContourStitch sessions.',
       },
+    ],
+  },
+  BODY_MEASUREMENT: {
+    '1': [
+      ...cameraV3.slice(0, 4),
+      ...accuracyV3.map((section) =>
+        section.title === 'No medical or identity use'
+          ? {
+              ...section,
+              text: section.text.replace(
+                'The Terms of Service and Body Measurement Consent provide additional limitations.',
+                'The Terms of Service provides additional limitations.',
+              ),
+            }
+          : section,
+      ),
+      ...cameraV3.slice(4),
     ],
   },
   CAMERA: {
@@ -379,6 +396,7 @@ export const documentLastUpdated: Record<
     '4': '2026-11-24',
     '5': '2026-11-25',
   },
+  BODY_MEASUREMENT: { '1': '2026-11-25' },
   CAMERA: { '1': null, '2': '2026-11-24', '3': '2026-11-24' },
   ACCURACY: { '1': null, '2': '2026-11-24', '3': '2026-11-24' },
   IMPROVEMENT: { '1': null, '2': '2026-11-24' },

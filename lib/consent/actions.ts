@@ -6,10 +6,9 @@ import { currentUser } from '@/lib/auth/auth';
 import { accountReturnPath } from '@/lib/auth/return-path';
 import {
   accountAgreements,
-  cameraAgreements,
+  measurementAgreements,
   checkedVersions,
   matchesVersions,
-  measurementAgreementsToConfirm,
   missingAgreements,
 } from './agreements';
 import {
@@ -63,9 +62,9 @@ export async function authorizeMeasurement(
 ): Promise<AgreementActionState> {
   const user = await currentUser();
   if ((user?.id ?? null) !== expectedUserId) return changedSession;
-  const versions = checkedVersions(form, cameraAgreements);
+  const versions = checkedVersions(form, measurementAgreements);
   if (!user) {
-    return matchesVersions(versions, cameraAgreements)
+    return matchesVersions(versions, measurementAgreements)
       ? { saved: true }
       : { error: changedAgreements };
   }
@@ -77,12 +76,14 @@ export async function authorizeMeasurement(
           'Review the current account agreements before starting. Reload this page to continue.';
         return [];
       }
-      const missing = measurementAgreementsToConfirm(state);
-      if (!matchesVersions(versions, missing)) {
+      if (!matchesVersions(versions, measurementAgreements)) {
         error = changedAgreements;
         return [];
       }
-      return acceptMissing({ ...state, CAMERA: undefined }, cameraAgreements);
+      return acceptMissing(
+        { ...state, BODY_MEASUREMENT: undefined },
+        measurementAgreements,
+      );
     });
     if (!saved) return changedSession;
   } catch {
@@ -98,8 +99,10 @@ export async function recheckMeasurementAccess(
   if (!user || user.id !== expectedUserId) return changedSession;
   try {
     const state = await readConsent(user.id);
-    return missingAgreements(state, [...accountAgreements, ...cameraAgreements])
-      .length
+    return missingAgreements(state, [
+      ...accountAgreements,
+      ...measurementAgreements,
+    ]).length
       ? { error: changedAgreements }
       : { saved: true };
   } catch {
@@ -117,32 +120,43 @@ export async function updateConsentPreference(
   const choice = form.get('choice');
   if (
     choice !== 'revoke-improvement' &&
-    choice !== 'revoke-camera' &&
+    choice !== 'revoke-body-measurement' &&
+    choice !== 'allow-body-measurement' &&
     choice !== 'allow-improvement'
   )
     return { error: 'Choose a valid consent preference.' };
+  const requested =
+    choice === 'allow-body-measurement'
+      ? 'BODY_MEASUREMENT'
+      : choice === 'allow-improvement'
+        ? 'IMPROVEMENT'
+        : null;
   if (
-    choice === 'allow-improvement' &&
-    !matchesVersions(checkedVersions(form, ['IMPROVEMENT']), ['IMPROVEMENT'])
+    requested &&
+    !matchesVersions(checkedVersions(form, [requested]), [requested])
   )
     return { error: changedAgreements };
 
   try {
     let renewalNeeded = false;
     const saved = await changeConsent(user.id, (state) => {
-      if (choice === 'revoke-camera') return withdraw(state, 'CAMERA');
+      if (choice === 'revoke-body-measurement')
+        return withdraw(state, 'BODY_MEASUREMENT');
       if (choice === 'revoke-improvement')
         return withdraw(state, 'IMPROVEMENT');
       if (missingAgreements(state, accountAgreements).length) {
         renewalNeeded = true;
         return [];
       }
-      return acceptMissing(state, ['IMPROVEMENT']);
+      return requested ? acceptMissing(state, [requested]) : [];
     });
     if (!saved) return changedSession;
     if (renewalNeeded)
       return {
-        error: 'Review the current account agreements before opting in.',
+        error:
+          requested === 'BODY_MEASUREMENT'
+            ? 'Review the current account agreements before saving measurement consent.'
+            : 'Review the current account agreements before opting in.',
       };
     revalidatePath('/account');
     revalidatePath('/measure');

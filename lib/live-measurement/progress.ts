@@ -52,7 +52,7 @@ export function measurementProgress(
           ? 'Camera observations are complete. Confirm this experimental estimate with a tape.'
           : estimate.priorValueCm !== undefined
             ? 'No supported camera estimate was available; the height-conditioned prior remains. Confirm it with a tape.'
-            : 'No supported estimate is available. Enter this measurement with a tape.',
+            : 'No supported estimate is available. Enter this measurement manually.',
     };
   }
 

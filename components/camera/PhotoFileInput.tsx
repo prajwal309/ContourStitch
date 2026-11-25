@@ -1,5 +1,6 @@
 'use client';
 
+import { measurementCopy } from '@/lib/measurement/copy';
 import { useEffect, useRef, useState } from 'react';
 import { inferPhoto } from '@/lib/vision/pose';
 import { assessQuality } from '@/lib/vision/quality';
@@ -114,7 +115,7 @@ export function PhotoFileInput({
         </>
       )}
       <button className="text-button" type="button" onClick={onManual}>
-        Enter tape measurements instead
+        {measurementCopy.enterManually}
       </button>
     </div>
   );

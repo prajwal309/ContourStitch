@@ -100,7 +100,7 @@ export function offlineAudioForInstruction(text: string) {
     [/\bhold still\b|\bstay still\b/, 'holdStill'],
     [/\bthree\b.*\btwo\b.*\bone\b/, 'countdown'],
     [
-      /\bmeasurement captured successfully\b|\bcapture[d] successfully\b/,
+      /\bmeasurement acquired\b|\bmeasurement captured successfully\b|\bcapture[d] successfully\b/,
       'measurementCaptured',
     ],
     [

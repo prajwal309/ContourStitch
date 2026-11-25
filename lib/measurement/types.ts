@@ -33,7 +33,7 @@ export type MeasurementEstimate = {
   warnings: string[];
 };
 export type MeasurementReport = {
-  source?: 'live-video';
+  source?: 'live-video' | 'progressive-video';
   estimates: MeasurementEstimate[];
   missing: Partial<Record<MeasurementKey, string>>;
   originalEstimates?: MeasurementEstimate[];

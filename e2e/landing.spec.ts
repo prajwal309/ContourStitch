@@ -19,7 +19,7 @@ for (const width of [360, 768, 1024, 1440]) {
     await expect(primary).toBeInViewport({ ratio: 1 });
     await expect(primary).toHaveAttribute('href', '/measure');
     await expect(
-      page.getByRole('link', { name: 'Start Measuring' }),
+      page.getByRole('link', { name: 'Camera-Based Measurement' }),
     ).toHaveAttribute('href', '/measure');
 
     const isMobileMenu = width <= 900;
@@ -61,6 +61,68 @@ for (const width of [360, 768, 1024, 1440]) {
   });
 }
 
+test('presents the Digital Fit Passport as a responsive sample card', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/');
+
+  const section = page.locator('.landing-passport');
+  const card = section.locator('.passport-card');
+  await expect(
+    section.getByRole('heading', { name: 'Digital Fit Passport' }).first(),
+  ).toBeVisible();
+  await expect(card.getByText('Example profile')).toBeVisible();
+  await expect(
+    card.getByRole('heading', { name: 'Digital Fit Passport' }),
+  ).toBeVisible();
+  const mannequin = card.getByRole('img', {
+    name: 'Front-view wireframe mannequin with chest, waist and hip measurement rings.',
+  });
+  await expect(mannequin).toHaveAttribute(
+    'src',
+    '/models/quaternius-female/passport-front.svg',
+  );
+  await expect(card.locator('canvas')).toHaveCount(0);
+  for (const label of [
+    'Chest circumference',
+    'Waist circumference',
+    'Hip circumference',
+  ]) {
+    await expect(card.getByText(label, { exact: true })).toBeVisible();
+  }
+  for (const value of ['90', '73', '97']) {
+    await expect(card.getByText(value, { exact: true })).toBeVisible();
+  }
+  const action = section.getByRole('link', { name: 'View My Fit Passport' });
+  await expect(action).toHaveAttribute('href', '/my-measurements');
+
+  for (const width of [1280, 768, 360]) {
+    await page.setViewportSize({ width, height: 850 });
+    const columnCount = await section
+      .locator('.landing-passport-grid')
+      .evaluate(
+        (element) =>
+          getComputedStyle(element).gridTemplateColumns.split(' ').length,
+      );
+    expect(columnCount).toBe(width <= 699 ? 1 : 2);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(width);
+  }
+
+  const description = await section
+    .locator('.passport-description')
+    .boundingBox();
+  const cardBounds = await card.boundingBox();
+  const actionBounds = await action.boundingBox();
+  expect(description).not.toBeNull();
+  expect(cardBounds).not.toBeNull();
+  expect(actionBounds).not.toBeNull();
+  expect(description!.y + description!.height).toBeLessThan(cardBounds!.y);
+  expect(cardBounds!.y + cardBounds!.height).toBeLessThan(actionBounds!.y);
+});
+
 test('uses the supplied hero image and removes the family photo', async ({
   page,
 }) => {
@@ -95,6 +157,9 @@ test('front preview loads a licensed 3D mannequin without overlay buttons', asyn
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  const assetLoaded = page.waitForResponse((response) =>
+    response.url().endsWith('/models/quaternius-female/mannequin-v1.bin'),
+  );
   await page.goto('/');
   const preview = page.getByRole('region', {
     name: 'See how a scan takes shape.',
@@ -111,13 +176,9 @@ test('front preview loads a licensed 3D mannequin without overlay buttons', asyn
   await expect(
     preview.getByRole('link', { name: 'Quaternius · CC0' }),
   ).toHaveCount(0);
-  const assetResponse = await page.request.get(
-    new URL(
-      '/models/quaternius-female/base-character.gltf',
-      page.url(),
-    ).toString(),
-  );
+  const assetResponse = await assetLoaded;
   expect(assetResponse.ok()).toBe(true);
+  expect((await assetResponse.body()).byteLength).toBeLessThan(100_000);
   await expect(preview.locator('canvas')).toBeVisible();
   const meshPreview = preview.locator('.body-mesh-preview');
   await expect(meshPreview.getByRole('button')).toHaveCount(0);
@@ -199,8 +260,8 @@ test('the sample measurement demo starts at the front stage and keeps user flows
 
   const mainLinks = [
     ['Open Family Fit Studio', '/family-fit'],
-    ['Open My Fit Profile', '/my-measurements'],
-    ['Enter tape measurements', '/results'],
+    ['View My Fit Passport', '/my-measurements'],
+    ['Enter Measurements Manually', '/results'],
     ['Read the Privacy Policy', agreementPath('PRIVACY')],
   ] as const;
   for (const [label, href] of mainLinks) {

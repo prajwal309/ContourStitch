@@ -41,15 +41,23 @@ async function installCameraMock(page: Page) {
       const count = document.querySelector('.live-progress')?.getAttribute('aria-label')?.match(/Pose (\\d+) of/);
       if (!count) return frame('front', performance.now());
       const pose = Number(count[1]);
-      poseTime += pose === 1 ? 100 : 250;
       const mode = window.__liveScanTestMode;
-      const selectedPose = mode === 'wrong-orientation'
+      poseTime += mode === 'wider-rear' ? 80 : pose === 1 ? 100 : 250;
+      const selectedPose = mode === 'wrong-orientation' || (mode === 'pause-rear' && pose === 4)
         ? 'side'
         : mode === 'poor-visibility'
           ? 'front'
           : ['front','extended','side','back','neck'][pose - 1];
       const sample = frame(selectedPose, poseTime);
       if (mode === 'poor-visibility') sample.landmarks[15].visibility = 0.1;
+      if (selectedPose === 'back' && mode === 'wider-rear') {
+        const { data, width } = sample.mask;
+        sample.landmarks[13].x -= 0.032;
+        sample.landmarks[14].x += 0.032;
+        for (let row = 120; row < 245; row++) {
+          data.fill(1, row * width + 105, row * width + 216);
+        }
+      }
       return sample;
     };
     Object.defineProperty(navigator, 'mediaDevices', {value: {
@@ -72,32 +80,23 @@ async function installCameraMock(page: Page) {
   });
 }
 
-test('keeps camera and accuracy agreement links inline on a wide consent page', async ({
+test('keeps the measurement policy link inline and opens it independently', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto('/measure');
-
-  const agreements = [
-    [
-      'I consent to camera-based body measurement processing.',
-      /^Body Measurement Consent/,
-    ],
-    [
-      'I understand that measurements are estimates and may contain errors.',
-      /^Measurement Accuracy Disclaimer/,
-    ],
-  ] as const;
-
-  for (const [label, linkName] of agreements) {
-    const labelBounds = await page.getByLabel(label).boundingBox();
-    const linkBounds = await page
-      .getByRole('link', { name: linkName })
-      .boundingBox();
-    expect(labelBounds).not.toBeNull();
-    expect(linkBounds).not.toBeNull();
-    expect(Math.abs(linkBounds!.y - labelBounds!.y)).toBeLessThan(3);
-  }
+  const checkbox = page.getByRole('checkbox', {
+    name: 'I agree to the Body Measurement Consent & Accuracy Policy.',
+  });
+  await expect(page.getByRole('checkbox')).toHaveCount(1);
+  await expect(checkbox).toHaveAttribute('required', '');
+  const link = page.getByRole('link', {
+    name: /^Body Measurement Consent & Accuracy Policy/,
+  });
+  await expect(link).toHaveAttribute('target', '_blank');
+  const labelBounds = await checkbox.boundingBox();
+  const linkBounds = await link.boundingBox();
+  expect(Math.abs(linkBounds!.y - labelBounds!.y)).toBeLessThan(7);
 });
 
 test('shows all nine estimates in a 3 by 3 desktop dashboard', async ({
@@ -107,10 +106,7 @@ test('shows all nine estimates in a 3 by 3 desktop dashboard', async ({
   await installCameraMock(page);
   await page.goto('/measure');
   await page
-    .getByRole('checkbox', { name: /I consent to camera-based/ })
-    .check();
-  await page
-    .getByRole('checkbox', { name: /measurements are estimates/ })
+    .getByRole('checkbox', { name: /^I agree to the Body Measurement Consent/ })
     .check();
   await page.getByRole('button', { name: /Continue privately/ }).click();
   await page.getByRole('button', { name: /Start guided video/ }).click();
@@ -151,11 +147,8 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
   await page.goto('/measure');
   await page
     .getByRole('checkbox', {
-      name: /I consent to camera-based/,
+      name: /^I agree to the Body Measurement Consent/,
     })
-    .check();
-  await page
-    .getByRole('checkbox', { name: /measurements are estimates/ })
     .check();
   await page.getByRole('button', { name: /Continue privately/ }).click();
   await page
@@ -262,10 +255,7 @@ test('gives corrective guidance and confirms only accepted camera measurements',
   await installCameraMock(page);
   await page.goto('/measure');
   await page
-    .getByRole('checkbox', { name: /I consent to camera-based/ })
-    .check();
-  await page
-    .getByRole('checkbox', { name: /measurements are estimates/ })
+    .getByRole('checkbox', { name: /^I agree to the Body Measurement Consent/ })
     .check();
   await page.getByRole('button', { name: /Continue privately/ }).click();
   await page.evaluate(() => {
@@ -282,6 +272,14 @@ test('gives corrective guidance and confirms only accepted camera measurements',
     name: 'Camera measurements acquired',
   });
   await expect(progress).toHaveAttribute('aria-valuenow', '0');
+  const inseam = page
+    .locator('.live-estimate')
+    .filter({ has: page.getByText('Inseam', { exact: true }) });
+  await expect(inseam.getByRole('progressbar')).toHaveCount(0);
+  await expect(inseam.locator('.live-measurement-value')).toHaveCSS(
+    'font-size',
+    '16px',
+  );
 
   await page.evaluate(() => {
     (window as Window & { __liveScanTestMode?: string }).__liveScanTestMode =
@@ -306,7 +304,15 @@ test('gives corrective guidance and confirms only accepted camera measurements',
   const shoulder = page
     .locator('.live-estimate-grid > div')
     .filter({ has: page.getByText('Shoulder breadth', { exact: true }) });
-  await expect(shoulder).toHaveClass(/is-updated/);
+  await expect(shoulder).toHaveClass(/is-acquired/);
+  await expect(shoulder.getByRole('progressbar')).toHaveAttribute(
+    'aria-valuenow',
+    '100',
+  );
+  await expect(shoulder.locator('.live-measurement-value')).toHaveCSS(
+    'font-size',
+    '20px',
+  );
   await expect(shoulder.locator('.live-acquired-check')).toHaveAttribute(
     'aria-label',
     'Camera measurement acquired',
@@ -317,11 +323,7 @@ test('gives corrective guidance and confirms only accepted camera measurements',
         .__spokenInstructions ?? [],
   );
   expect(spokenInstructions).toEqual(
-    expect.arrayContaining([
-      expect.stringContaining(
-        'Shoulder breadth and sleeve length measurements have been acquired',
-      ),
-    ]),
+    expect.arrayContaining([expect.stringContaining('Measurement acquired.')]),
   );
   expect(
     await page.evaluate(
@@ -330,6 +332,58 @@ test('gives corrective guidance and confirms only accepted camera measurements',
           .__confirmationTones ?? 0,
     ),
   ).toBeGreaterThan(0);
+});
+
+test('reopens a measurement when a later pose widens its camera uncertainty', async ({
+  page,
+}) => {
+  await installCameraMock(page);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/measure');
+  await page.evaluate(() =>
+    Reflect.set(window, '__liveScanTestMode', 'pause-rear'),
+  );
+  await page
+    .getByRole('checkbox', { name: /^I agree to the Body Measurement Consent/ })
+    .check();
+  await page.getByRole('button', { name: /Continue privately/ }).click();
+  await page.getByRole('button', { name: /Start guided video/ }).click();
+
+  const chest = page
+    .locator('.live-estimate')
+    .filter({ has: page.getByText('Chest circumference', { exact: true }) });
+  const progress = chest.getByRole('progressbar', {
+    name: 'Chest circumference precision',
+  });
+  await expect(progress).toHaveAttribute('aria-valuenow', '100', {
+    timeout: 20_000,
+  });
+  await expect(chest).toHaveClass(/is-acquired/);
+  const originalBounds = await chest.boundingBox();
+
+  await page.evaluate(() =>
+    Reflect.set(window, '__liveScanTestMode', 'wider-rear'),
+  );
+  await expect(progress).not.toHaveAttribute('aria-valuenow', '100');
+  await expect(chest).toHaveClass(/is-refining/);
+  await expect(page.locator('.body-guide')).toHaveAttribute(
+    'data-focus',
+    /chest/,
+  );
+  await expect(
+    chest.getByRole('img', { name: 'Camera measurement acquired' }),
+  ).toHaveCount(0);
+  expect(await chest.boundingBox()).toMatchObject({
+    width: originalBounds?.width,
+    height: originalBounds?.height,
+  });
+  await expect(chest.locator('.live-uncertainty')).toHaveText(
+    /^±[0-9]+\.[0-9] cm$/,
+  );
+  await expect(progress.locator('.live-precision-fill')).toHaveCSS(
+    'transition-duration',
+    '0s',
+  );
 });
 
 test('the real on-device model withholds estimates from a blank camera feed', async ({
@@ -364,11 +418,8 @@ test('the real on-device model withholds estimates from a blank camera feed', as
   await page.goto('/measure');
   await page
     .getByRole('checkbox', {
-      name: /I consent to camera-based/,
+      name: /^I agree to the Body Measurement Consent/,
     })
-    .check();
-  await page
-    .getByRole('checkbox', { name: /measurements are estimates/ })
     .check();
   await page.getByRole('button', { name: /Continue privately/ }).click();
   await page.getByRole('button', { name: /Start guided video/ }).click();
@@ -391,7 +442,7 @@ test('the real on-device model withholds estimates from a blank camera feed', as
     page.getByRole('progressbar', { name: 'Camera measurements acquired' }),
   ).toHaveAttribute('aria-valuenow', '0');
   await page
-    .getByRole('button', { name: 'Enter tape measurements instead' })
+    .getByRole('button', { name: 'Enter measurements manually' })
     .click();
   await expect(page.getByText('0 of 7 measurements')).toBeVisible();
 });

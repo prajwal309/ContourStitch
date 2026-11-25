@@ -5,8 +5,8 @@ import { database } from '@/lib/auth/db';
 import {
   agreements,
   accountAgreements,
-  agreementTypes,
-  cameraAgreements,
+  activeAgreementTypes,
+  measurementAgreements,
   currentAcceptance,
   missingAgreements,
   type Agreement,
@@ -55,7 +55,7 @@ export function registrationEvents(improvement: boolean) {
   const now = new Date();
   return [
     ...accountAgreements.map((type) => acceptance(type, now)),
-    ...cameraAgreements.map((type) => acceptance(type, now)),
+    ...measurementAgreements.map((type) => acceptance(type, now)),
     improvement
       ? acceptance('IMPROVEMENT', now)
       : {
@@ -93,14 +93,17 @@ export function acceptMissing(
   );
 }
 
-export function withdraw(state: ConsentState, type: 'CAMERA' | 'IMPROVEMENT') {
+export function withdraw(
+  state: ConsentState,
+  type: 'BODY_MEASUREMENT' | 'IMPROVEMENT',
+) {
   const event = state[type];
   if (event?.status !== 'ACCEPTED' || !event.acceptedAt) return [];
   return [{ ...event, status: 'REVOKED' as const, revokedAt: new Date() }];
 }
 
 export function reviewableAgreements(state: ConsentState) {
-  return agreementTypes.map((type) => ({
+  return activeAgreementTypes.map((type) => ({
     type,
     event: state[type],
     active: currentAcceptance(state, type),

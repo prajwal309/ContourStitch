@@ -23,12 +23,11 @@ import {
 import {
   agreements,
   accountAgreements,
-  cameraAgreements,
+  measurementAgreements,
   missingAgreements,
   checkedRegistrationVersions,
   validRegistrationVersions,
   registrationAgreements,
-  measurementAgreementsToConfirm,
   type ConsentState,
 } from '@/lib/consent/agreements';
 
@@ -48,7 +47,7 @@ const acceptedAccount = Object.fromEntries(
 
 function cameraForm() {
   const form = new FormData();
-  for (const type of cameraAgreements) {
+  for (const type of measurementAgreements) {
     form.set(type, 'on');
     form.set(`version-${type}`, agreements[type].version);
   }
@@ -65,12 +64,12 @@ describe('server consent checks', () => {
     });
   });
 
-  it('requires both current agreements before authorizing a guest', async () => {
+  it('requires the current policy before authorizing a guest', async () => {
     const form = cameraForm();
-    form.delete('ACCURACY');
+    form.delete('BODY_MEASUREMENT');
     expect(await authorizeMeasurement(null, {}, form)).toHaveProperty('error');
-    form.set('ACCURACY', 'on');
-    form.set('version-ACCURACY', 'previous');
+    form.set('BODY_MEASUREMENT', 'on');
+    form.set('version-BODY_MEASUREMENT', 'previous');
     expect(await authorizeMeasurement(null, {}, form)).toHaveProperty('error');
     expect(await authorizeMeasurement(null, {}, cameraForm())).toEqual({
       saved: true,
@@ -104,8 +103,8 @@ describe('server consent checks', () => {
       saved: true,
     });
     expect(mocks.acceptMissing).toHaveBeenCalledWith(
-      { ...acceptedAccount, CAMERA: undefined },
-      cameraAgreements,
+      { ...acceptedAccount, BODY_MEASUREMENT: undefined },
+      measurementAgreements,
     );
   });
 
@@ -119,26 +118,30 @@ describe('server consent checks', () => {
   });
 });
 
-it('requires the single registration check and each current version without making improvement consent mandatory', () => {
+it('requires both registration choices and each current version without making improvement consent mandatory', () => {
   const form = new FormData();
   for (const type of registrationAgreements)
     form.set(`version-${type}`, agreements[type].version);
   expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
     false,
   );
-  form.set('REGISTRATION', 'on');
+  form.set('ACCOUNT', 'on');
+  expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
+    false,
+  );
+  form.set('BODY_MEASUREMENT', 'on');
   expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
     true,
   );
-  form.set('version-CAMERA', 'stale');
+  form.set('version-BODY_MEASUREMENT', 'stale');
   expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
     false,
   );
 });
 
-it('asks separately for camera consent even if camera and accuracy were accepted at signup', () => {
+it('does not grant the unified policy from legacy acceptance', () => {
   const state = Object.fromEntries(
-    cameraAgreements.map((type) => [
+    (['CAMERA', 'ACCURACY'] as const).map((type) => [
       type,
       {
         type,
@@ -149,5 +152,7 @@ it('asks separately for camera consent even if camera and accuracy were accepted
       },
     ]),
   ) as ConsentState;
-  expect(measurementAgreementsToConfirm(state)).toEqual(['CAMERA']);
+  expect(missingAgreements(state, measurementAgreements)).toEqual([
+    'BODY_MEASUREMENT',
+  ]);
 });

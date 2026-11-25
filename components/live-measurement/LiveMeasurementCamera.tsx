@@ -1,7 +1,9 @@
 'use client';
 
+import { measurementCopy } from '@/lib/measurement/copy';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { BodyGuide } from '@/components/camera/BodyGuide';
+import { LiveEstimateCard } from './LiveEstimateCard';
 import { PoseOverlay } from '@/components/camera/PoseOverlay';
 import { cameraError, releaseCamera, requestCamera } from '@/lib/camera/media';
 import {
@@ -17,6 +19,15 @@ import {
 } from '@/lib/live-measurement/guidance';
 import { GuidedScan } from '@/lib/live-measurement/session';
 import {
+  MultiViewScan,
+  supportedMeasurements,
+  type MultiViewSnapshot,
+} from '@/lib/live-measurement/multiview/engine';
+import { multiViewConfig } from '@/lib/live-measurement/multiview/config';
+import type { Anchor } from '@/lib/live-measurement/multiview/observe';
+import { createObservationClient } from '@/lib/live-measurement/multiview/worker-client';
+import { MeshPreview } from '@/components/reconstruction/MeshPreview';
+import {
   labels,
   type MeasurementKey,
   type MeasurementReport,
@@ -26,10 +37,12 @@ import {
   acquisitionProgress,
   reachedAcquisitionMilestones,
 } from '@/lib/live-measurement/feedback';
-import { measurementProgress } from '@/lib/live-measurement/progress';
 import {
-  progressiveMeasurementKeys,
-  type ProgressiveEstimate,
+  formatPrecision,
+  precisionProgress,
+} from '@/lib/live-measurement/precision';
+import {
+  measurementDependencies,
   type ProgressiveMeasurementKey,
 } from '@/lib/live-measurement/progressive';
 import { createScannerVisionEngine } from '@/lib/scanner/vision';
@@ -40,6 +53,7 @@ import { useVoiceGuidance } from '@/components/voice/useVoiceGuidance';
 type Props = {
   heightCm: number;
   useReference: boolean;
+  multiView?: boolean;
   onReview: (report: MeasurementReport) => void;
   engineFactory?: () => Promise<VisionEngine>;
   verifyCameraAccess?: () => Promise<void>;
@@ -47,10 +61,29 @@ type Props = {
 
 type Facing = 'environment' | 'user';
 type Preview = Pick<VisionFrame, 'height' | 'width' | 'landmarks'>;
-type Frozen = { width: number; height: number; bodyPixels: number };
-type SmoothedValues = Partial<Record<ProgressiveMeasurementKey, number>>;
+type ReferenceFrame = {
+  bodyPixels?: number;
+  anchorPixels?: Partial<Record<Anchor, number>>;
+  timestamp: number;
+};
+type Frozen = Omit<ReferenceFrame, 'timestamp'> & {
+  width: number;
+  height: number;
+};
+type DisplayKey = ProgressiveMeasurementKey | 'outseam';
+type ScanSnapshot = ReturnType<GuidedScan['snapshot']> | MultiViewSnapshot;
 
-const progressiveLabels: Record<ProgressiveMeasurementKey, string> = {
+function newScan(
+  multiView: boolean,
+  calibration: Calibration,
+  heightCm: number,
+) {
+  return multiView
+    ? new MultiViewScan(calibration, heightCm)
+    : new GuidedScan(calibration, undefined, heightCm);
+}
+
+const progressiveLabels: Record<DisplayKey, string> = {
   shoulder: labels.shoulder,
   arm: labels.arm,
   chest: labels.chest,
@@ -60,31 +93,21 @@ const progressiveLabels: Record<ProgressiveMeasurementKey, string> = {
   torso: 'Torso length',
   neck: labels.neck,
   sleeve: labels.sleeve,
+  outseam: labels.outseam,
 };
 
-function regionForPose(pose?: Pose) {
-  switch (pose) {
-    case 'front':
-      return 'upper-body';
-    case 'extended':
-      return 'arms';
-    case 'side':
-      return 'torso';
-    case 'back':
-      return 'torso';
-    case 'neck':
-      return 'neck';
-    default:
-      return null;
-  }
-}
-
-function wasMeasurementAcquired(
-  key: ProgressiveMeasurementKey,
-  acquired: ReadonlySet<MeasurementKey>,
-) {
-  return key !== 'torso' && acquired.has(key);
-}
+const anatomyForMeasurement: Record<DisplayKey, string> = {
+  shoulder: 'shoulders',
+  arm: 'arms',
+  sleeve: 'arms',
+  chest: 'chest',
+  waist: 'waist',
+  hip: 'hips',
+  torso: 'torso',
+  neck: 'neck',
+  inseam: 'legs',
+  outseam: 'legs',
+};
 
 function acquisitionMessage({
   phase,
@@ -126,101 +149,6 @@ function acquisitionMessage({
   }
 }
 
-function useSmoothedEstimateValues(estimates: readonly ProgressiveEstimate[]) {
-  const [values, setValues] = useState<SmoothedValues>({});
-  const valuesRef = useRef<SmoothedValues>({});
-
-  useEffect(() => {
-    if (!estimates.length) return;
-    const targets = new Map(
-      estimates
-        .filter(
-          (estimate): estimate is ProgressiveEstimate & { valueCm: number } =>
-            estimate.valueCm !== null,
-        )
-        .map(({ key, valueCm }) => [key, valueCm] as const),
-    );
-    const update = () => {
-      const current = valuesRef.current;
-      const next = { ...current };
-      let changed = false;
-      let moving = false;
-
-      targets.forEach((target, key) => {
-        const previous = current[key];
-        const value =
-          previous === undefined
-            ? target
-            : previous + (target - previous) * 0.24;
-        const smoothed = Math.abs(target - value) < 0.15 ? target : value;
-
-        if (previous !== smoothed) {
-          next[key] = smoothed;
-          changed = true;
-        }
-        if (Math.abs(target - smoothed) >= 0.15) moving = true;
-      });
-
-      if (changed) {
-        valuesRef.current = next;
-        setValues(next);
-      }
-      if (!moving) window.clearInterval(timer);
-    };
-
-    const timer = window.setInterval(update, 50);
-    update();
-    return () => window.clearInterval(timer);
-  }, [estimates]);
-
-  return values;
-}
-
-function useAcquiredMeasurementHighlights(
-  estimates: readonly { key: MeasurementKey }[],
-) {
-  const [highlighted, setHighlighted] = useState<ReadonlySet<MeasurementKey>>(
-    () => new Set(),
-  );
-  const known = useRef(new Set<MeasurementKey>());
-  const timers = useRef(new Map<MeasurementKey, number>());
-
-  useEffect(() => {
-    const current = new Set(estimates.map(({ key }) => key));
-    const newlyAcquired = [...current].filter((key) => !known.current.has(key));
-    if (newlyAcquired.length) {
-      setHighlighted((previous) => new Set([...previous, ...newlyAcquired]));
-      for (const key of newlyAcquired) {
-        const timer = timers.current.get(key);
-        if (timer !== undefined) window.clearTimeout(timer);
-        timers.current.set(
-          key,
-          window.setTimeout(() => {
-            setHighlighted((previous) => {
-              const next = new Set(previous);
-              next.delete(key);
-              return next;
-            });
-            timers.current.delete(key);
-          }, 900),
-        );
-      }
-    }
-  }, [estimates]);
-  useEffect(() => {
-    known.current = new Set(estimates.map(({ key }) => key));
-  }, [estimates]);
-
-  useEffect(
-    () => () => {
-      timers.current.forEach((timer) => window.clearTimeout(timer));
-    },
-    [],
-  );
-
-  return highlighted;
-}
-
 export function LiveMeasurementCamera(props: Props) {
   const [facing, setFacing] = useState<Facing>('environment');
   const [attempt, setAttempt] = useState(0);
@@ -241,6 +169,7 @@ export function LiveMeasurementCamera(props: Props) {
 function CameraRun({
   heightCm,
   useReference,
+  multiView = false,
   onReview,
   facing,
   onRetry,
@@ -251,18 +180,20 @@ function CameraRun({
   const video = useRef<HTMLVideoElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const stopCapture = useRef<(() => void) | null>(null);
-  const scan = useRef<GuidedScan | null>(null);
-  const referenceFrame = useRef<{
-    bodyPixels: number;
-    timestamp: number;
-  } | null>(null);
+  const scan = useRef<GuidedScan | MultiViewScan | null>(null);
+  const referenceFrame = useRef<ReferenceFrame | null>(null);
   const [phase, setPhase] = useState<'reference' | 'poses'>(
     useReference ? 'reference' : 'poses',
   );
-  const [snapshot, setSnapshot] = useState(() =>
-    new GuidedScan({ kind: 'height', heightCm }).snapshot(),
+  const [snapshot, setSnapshot] = useState<ScanSnapshot>(() =>
+    newScan(multiView, { kind: 'height', heightCm }, heightCm).snapshot(),
   );
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [timings, setTimings] = useState<{
+    inferenceMs: number;
+    geometryMs: number;
+    processingFps: number;
+  } | null>(null);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('Requesting camera permission…');
   const [canFreeze, setCanFreeze] = useState(false);
@@ -272,34 +203,77 @@ function CameraRun({
   const [lower, setLower] = useState(75);
   const [length, setLength] = useState('');
   const [overlay, setOverlay] = useState(true);
-  const current = poses[snapshot.index];
+  const adaptive = 'target' in snapshot ? snapshot : undefined;
+  const current = adaptive
+    ? poses.find(({ id }) => id === adaptive.target)
+    : poses[snapshot.index];
   const provisional = error ? null : snapshot.provisional;
   const liveReport = provisional ?? snapshot.report;
-  const smoothedValues = useSmoothedEstimateValues(snapshot.progressive);
-  const acquiredMeasurements = useAcquiredMeasurementHighlights(
-    snapshot.report.estimates,
-  );
-  const completedViews = poses.slice(0, snapshot.index).map(({ id }) => id);
   const captureActive = !error && phase === 'poses' && !snapshot.complete;
-  const focusedRegion = snapshot.held ? regionForPose(current?.id) : null;
   const hasPreview = preview !== null;
-  const acquisitionText = acquisitionMessage({
-    phase,
-    pose: current?.id,
-    held: snapshot.held,
-    complete: snapshot.complete,
-    error,
-    message: snapshot.message,
-    status,
-    hasPreview,
+  const estimates = snapshot.progressive.map((estimate) => {
+    const { key } = estimate;
+    const precision = estimate.cameraPrecision;
+    const progress = precisionProgress(precision);
+    const acquired = key !== 'torso' && progress?.acquired === true;
+    const dependencies =
+      key === 'outseam' ? undefined : measurementDependencies[key];
+    const contributing =
+      'status' in estimate
+        ? adaptive?.evidence.some((item) => item.key === key && item.visible)
+        : snapshot.held &&
+          current &&
+          dependencies &&
+          (dependencies.requiredViews.includes(current.id) ||
+            dependencies.optionalViews.includes(current.id));
+    const active = Boolean(
+      captureActive && hasPreview && contributing && !acquired,
+    );
+    return {
+      estimate,
+      active,
+      acquired,
+      fraction: progress?.acquired && !acquired ? 0.99 : progress?.fraction,
+      durationMs: progress?.durationMs,
+      uncertainty: precision?.uncertaintyCm,
+    };
   });
-  const acquisition = acquisitionProgress(snapshot.report.estimates);
+  const focusedRegions = [
+    ...new Set(
+      estimates
+        .filter(({ active }) => active)
+        .map(({ estimate }) => anatomyForMeasurement[estimate.key]),
+    ),
+  ].join(' ');
+  const acquiredKeys = estimates.flatMap(({ acquired, estimate }) =>
+    acquired && estimate.key !== 'torso' ? [estimate.key] : [],
+  );
+  const acquisitionSignature = acquiredKeys.join(',');
+  const acquisitionText =
+    adaptive && hasPreview && !error
+      ? snapshot.message
+      : acquisitionMessage({
+          phase,
+          pose: current?.id,
+          held: snapshot.held,
+          complete: snapshot.complete,
+          error,
+          message: snapshot.message,
+          status,
+          hasPreview,
+        });
+  const acquisition = acquisitionProgress(
+    acquiredKeys.map((key) => ({ key })),
+    adaptive ? supportedMeasurements : undefined,
+  );
   const allMeasurementsAcquired = acquisition.percent === 100;
   const completionMessage = allMeasurementsAcquired
-    ? 'All required measurements acquired. Thank you.'
-    : 'Scan complete. Use a tape for any missing measurements.';
+    ? adaptive
+      ? 'All available camera measurements acquired.'
+      : 'All required measurements acquired. Thank you.'
+    : 'Scan complete. Verify estimates and enter missing measurements manually.';
   const guidance = error
-    ? 'Camera unavailable. Retry or enter tape measurements.'
+    ? 'Camera unavailable. Retry or enter measurements manually.'
     : snapshot.message;
   const spokenInstruction =
     phase === 'poses' && (hasPreview || snapshot.complete)
@@ -317,60 +291,55 @@ function CameraRun({
       ? `${cameraEvidenceCount} estimates retain camera evidence; others are references or need data.`
       : 'Camera unavailable · references shown where supported.'
     : cameraEvidenceCount
-      ? `${cameraEvidenceCount} of ${progressiveMeasurementKeys.length} estimates include camera evidence; others remain references or need data.`
+      ? `${cameraEvidenceCount} of ${snapshot.progressive.length} estimates include camera evidence; others remain references or need data.`
       : phase === 'reference'
         ? 'Height-based population references · camera observations have not started.'
-        : 'Height-based population references · no camera evidence yet.';
+        : adaptive &&
+            !adaptive.calibrated &&
+            adaptive.evidence.some(({ observed }) => observed)
+          ? 'Camera contours collected. A metric reference is needed for centimetres.'
+          : 'Height-based population references · no camera evidence yet.';
   const armSides = liveReport.estimates.find(
     (estimate) => estimate.key === 'arm',
   )?.sidesCm;
   const armMismatch =
     !!armSides &&
     Math.abs(armSides.left - armSides.right) >= c.asymmetryNoticeCm;
-  const lastAcceptedIndex = useRef(snapshot.index);
-  const lastAcquisitionPercent = useRef(acquisition.percent);
-  const acceptedKeys = useRef(
-    new Set(snapshot.report.estimates.map(({ key }) => key)),
-  );
+  const lastAcquisitionPercent = useRef(0);
+  const acceptedKeys = useRef(new Set<MeasurementKey>());
+  const complete = snapshot.complete;
   useEffect(() => {
-    const currentKeys = new Set(
-      snapshot.report.estimates.map(({ key }) => key),
+    if (phase !== 'poses' || error) return;
+    const keys = acquisitionSignature
+      ? (acquisitionSignature.split(',') as MeasurementKey[])
+      : [];
+    const newlyAcquired = keys.filter((key) => !acceptedKeys.current.has(key));
+    acceptedKeys.current = new Set(keys);
+    if (!newlyAcquired.length) return;
+
+    const milestones = reachedAcquisitionMilestones(
+      lastAcquisitionPercent.current,
+      acquisition.percent,
     );
-    const previousIndex = lastAcceptedIndex.current;
-    const newlyAcquired = [...currentKeys].filter(
-      (key) => !acceptedKeys.current.has(key),
+    lastAcquisitionPercent.current = Math.max(
+      lastAcquisitionPercent.current,
+      acquisition.percent,
     );
-    if (
-      phase === 'poses' &&
-      !error &&
-      snapshot.index > previousIndex &&
-      poses[previousIndex]
-    ) {
-      const milestones = reachedAcquisitionMilestones(
-        lastAcquisitionPercent.current,
-        acquisition.percent,
-      );
-      announceAcquisition(
-        acquisitionAnnouncement({
-          view: poses[previousIndex].label,
-          newlyAcquired,
-          percent: acquisition.percent,
-          milestones,
-          complete: snapshot.complete,
-        }),
-      );
-    }
-    lastAcceptedIndex.current = snapshot.index;
-    lastAcquisitionPercent.current = acquisition.percent;
-    acceptedKeys.current = currentKeys;
+    const announcement = acquisitionAnnouncement({
+      view: 'Camera',
+      newlyAcquired,
+      percent: acquisition.percent,
+      milestones,
+      complete,
+    });
+    announceAcquisition(`Measurement acquired. ${announcement}`);
   }, [
     acquisition.percent,
+    acquisitionSignature,
     announceAcquisition,
+    complete,
     error,
     phase,
-    snapshot.complete,
-    snapshot.index,
-    snapshot.report.estimates,
   ]);
 
   useEffect(() => {
@@ -382,9 +351,14 @@ function CameraRun({
     let engine: VisionEngine | null = null;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let lastVideoTime = -1;
+    let priorProcessingAt: number | undefined;
+    const localDiagnostics =
+      multiView && process.env.NODE_ENV === 'development';
+    let observationClient:
+      ReturnType<typeof createObservationClient> | undefined;
     scan.current = useReference
       ? null
-      : new GuidedScan({ kind: 'height', heightCm });
+      : newScan(multiView, { kind: 'height', heightCm }, heightCm);
 
     function stop() {
       if (stopped) return;
@@ -392,6 +366,7 @@ function CameraRun({
       clearTimeout(timer);
       releaseCamera(stream);
       engine?.close();
+      observationClient?.close();
       referenceFrame.current = null;
       if (referenceCanvas) {
         referenceCanvas.width = 0;
@@ -424,7 +399,9 @@ function CameraRun({
           lastVideoTime !== element.currentTime
         ) {
           lastVideoTime = element.currentTime;
+          const inferenceAt = localDiagnostics ? performance.now() : 0;
           const frame = await engine.infer(element);
+          const geometryAt = localDiagnostics ? performance.now() : 0;
           if (stopped) return;
           setPreview({
             width: frame.width,
@@ -432,15 +409,58 @@ function CameraRun({
             landmarks: frame.landmarks,
           });
           const currentScan = scan.current;
+          const observation = observationClient
+            ? await observationClient.observe(frame)
+            : null;
+          if (stopped) return;
+          if (currentScan !== scan.current) {
+            timer = setTimeout(tick, multiViewConfig.inferenceIntervalMs);
+            return;
+          }
           if (currentScan) {
-            const next = currentScan.update(frame);
+            const next =
+              currentScan instanceof MultiViewScan
+                ? observation
+                  ? currentScan.update(observation)
+                  : currentScan.snapshot()
+                : currentScan.update(frame);
             setStatus('Camera ready.');
             setSnapshot(next);
+            if (localDiagnostics) {
+              if (priorProcessingAt !== undefined)
+                setTimings({
+                  inferenceMs: geometryAt - inferenceAt,
+                  geometryMs: performance.now() - geometryAt,
+                  processingFps: 1000 / (inferenceAt - priorProcessingAt),
+                });
+              priorProcessingAt = inferenceAt;
+            }
             if (next.complete) {
               setPreview(null);
               stop();
               return;
             }
+          } else if (observation) {
+            const anchorPixels = Object.fromEntries(
+              observation.regions.map(({ anchor, anchorPixels }) => [
+                anchor,
+                anchorPixels,
+              ]),
+            );
+            const suitable =
+              observation.yaw !== null &&
+              Math.abs(observation.yaw) <= c.viewToleranceDegrees &&
+              observation.regions.length > 0;
+            referenceFrame.current = suitable
+              ? { anchorPixels, timestamp: frame.timestamp }
+              : null;
+            setCanFreeze(suitable);
+            setStatus(
+              observation.message ??
+                (suitable
+                  ? 'Reference frame ready to capture.'
+                  : 'Face the camera with your torso or thighs and the reference object in view.'),
+            );
           } else {
             const { bounds, message } = frameFraming(frame);
             const view = frameFacing(frame);
@@ -462,7 +482,10 @@ function CameraRun({
             );
           }
         }
-        timer = setTimeout(tick, c.intervalMs);
+        timer = setTimeout(
+          tick,
+          multiView ? multiViewConfig.inferenceIntervalMs : c.intervalMs,
+        );
       } catch (failure) {
         stop();
         setPreview(null);
@@ -493,6 +516,7 @@ function CameraRun({
           return;
         }
         engine = initialized;
+        if (multiView) observationClient = createObservationClient();
         void tick();
       } catch (failure) {
         if (stopped) return;
@@ -513,10 +537,17 @@ function CameraRun({
       window.removeEventListener('orientationchange', interrupt);
       window.removeEventListener('pagehide', interrupt);
     };
-  }, [engineFactory, facing, heightCm, useReference, verifyCameraAccess]);
+  }, [
+    engineFactory,
+    facing,
+    heightCm,
+    multiView,
+    useReference,
+    verifyCameraAccess,
+  ]);
 
   function begin(calibration: Calibration) {
-    scan.current = new GuidedScan(calibration, undefined, heightCm);
+    scan.current = newScan(multiView, calibration, heightCm);
     setSnapshot(scan.current.snapshot());
     setPhase('poses');
     setFrozen(null);
@@ -556,18 +587,37 @@ function CameraRun({
       width: target.width,
       height: target.height,
       bodyPixels: frame.bodyPixels,
+      anchorPixels: frame.anchorPixels,
     });
   }
 
   function applyReference() {
+    const objectPixels = frozen ? ((lower - upper) / 100) * frozen.height : 0;
+    const objectCm = Number(length);
+    const anchorCm =
+      frozen?.anchorPixels &&
+      objectPixels >= c.minReferencePixels &&
+      Number.isFinite(objectCm) &&
+      objectCm > 0
+        ? Object.fromEntries(
+            Object.entries(frozen.anchorPixels).flatMap(([anchor, pixels]) => {
+              const cm = (pixels / objectPixels) * objectCm;
+              const fraction = cm / heightCm;
+              return fraction >= 0.08 && fraction <= 0.55 ? [[anchor, cm]] : [];
+            }),
+          )
+        : null;
     const calibrated =
-      frozen &&
-      calibrateReference(
-        heightCm,
-        Number(length),
-        frozen.bodyPixels,
-        ((lower - upper) / 100) * frozen.height,
-      );
+      anchorCm && Object.keys(anchorCm).length
+        ? { kind: 'reference' as const, heightCm, anchorCm }
+        : frozen?.bodyPixels
+          ? calibrateReference(
+              heightCm,
+              objectCm,
+              frozen.bodyPixels,
+              objectPixels,
+            )
+          : null;
     if (!calibrated) {
       setReferenceError(
         'The reference does not agree with your entered height. Check its length and marker positions, or use your height.',
@@ -579,7 +629,11 @@ function CameraRun({
 
   function review() {
     stopCapture.current?.();
-    onReview(snapshot.report);
+    onReview(
+      scan.current instanceof MultiViewScan
+        ? scan.current.finish().report
+        : snapshot.report,
+    );
   }
 
   const ratio = preview ? preview.width / preview.height : null;
@@ -588,23 +642,25 @@ function CameraRun({
       <div>
         {phase === 'poses' && !snapshot.complete && (
           <>
-            <ol
-              className="flow-progress live-progress"
-              aria-label={`Pose ${snapshot.index + 1} of ${poses.length}`}
-            >
-              {poses.map(({ id, label }, index) => (
-                <li
-                  key={id}
-                  aria-current={index === snapshot.index ? 'step' : undefined}
-                  className={index < snapshot.index ? 'complete' : undefined}
-                >
-                  <b aria-hidden="true">
-                    {index < snapshot.index ? '✓' : index + 1}
-                  </b>
-                  <span>{label}</span>
-                </li>
-              ))}
-            </ol>
+            {!adaptive && (
+              <ol
+                className="flow-progress live-progress"
+                aria-label={`Pose ${snapshot.index + 1} of ${poses.length}`}
+              >
+                {poses.map(({ id, label }, index) => (
+                  <li
+                    key={id}
+                    aria-current={index === snapshot.index ? 'step' : undefined}
+                    className={index < snapshot.index ? 'complete' : undefined}
+                  >
+                    <b aria-hidden="true">
+                      {index < snapshot.index ? '✓' : index + 1}
+                    </b>
+                    <span>{label}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
             <h2 className="scan-instruction" aria-live="polite">
               {guidance}
             </h2>
@@ -637,7 +693,7 @@ function CameraRun({
           {overlay && (
             <BodyGuide
               side={current?.id === 'side' && phase === 'poses'}
-              focus={focusedRegion}
+              focus={focusedRegions}
             />
           )}
         </div>
@@ -682,8 +738,8 @@ function CameraRun({
             <h2>Calibrate with a reference</h2>
             <p>
               Use a rigid object of known length, such as a ruler. Place it
-              upright beside you in the same plane as your body. Keep the phone
-              level and in the same position for every pose.
+              upright beside you in the same plane as your body. Keep the camera
+              level and in place throughout the scan.
             </p>
             {frozen ? (
               <>
@@ -811,8 +867,17 @@ function CameraRun({
               </label>
             </div>
             <VoiceControls guidance={voiceGuidance} />
+            {adaptive && !!snapshot.report.estimates.length && (
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={review}
+              >
+                Review measurements
+              </button>
+            )}
             <button type="button" className="text-button" onClick={review}>
-              Enter tape measurements instead
+              {measurementCopy.enterManually}
             </button>
           </>
         )}
@@ -867,110 +932,112 @@ function CameraRun({
           </div>
         </div>
         <dl className="live-estimate-grid">
-          {progressiveMeasurementKeys.map((key) => {
-            const estimate = snapshot.progressive.find(
-              (item) => item.key === key,
-            )!;
-            const progress = measurementProgress(key, estimate, {
-              pose: current?.id,
-              completedViews,
-              captureActive,
-              scanComplete: snapshot.complete,
-            });
-            const sourceLabel =
-              estimate.source === 'prior'
-                ? 'Height-based population reference'
-                : estimate.source === 'blended'
-                  ? 'Population reference refined with camera evidence'
-                  : estimate.source === 'camera'
-                    ? 'Camera-supported estimate'
-                    : 'No supported estimate yet';
-            const showSourceMarker =
-              estimate.source !== 'prior' || (key === 'arm' && armMismatch);
-            const rangeCm =
-              estimate.rangeHalfWidthCm === null
-                ? null
-                : Math.max(1, Math.round(estimate.rangeHalfWidthCm));
-            const rangeKind =
-              estimate.source === 'prior'
-                ? 'population variation'
-                : 'working range';
-            const displayValue =
-              estimate.valueCm === null
-                ? null
-                : Math.round(smoothedValues[key] ?? estimate.valueCm);
-            return (
-              <div
-                key={key}
-                className={`live-estimate ${progress.state}${wasMeasurementAcquired(key, acquiredMeasurements) ? ' is-updated' : ''}`}
-              >
-                <dt>
-                  <span className="live-estimate-name">
-                    {progressiveLabels[key]}
-                  </span>
-                  <span
-                    className={`live-source-indicator${showSourceMarker ? ` source-${estimate.source}` : ' is-empty'}${key === 'arm' && armMismatch ? ' is-warning' : ''}`}
-                    title={
-                      key === 'arm' && armMismatch
-                        ? `${sourceLabel}. Verify both arm sides with a tape.`
-                        : sourceLabel
-                    }
-                    aria-label={
-                      showSourceMarker
-                        ? key === 'arm' && armMismatch
-                          ? `${sourceLabel}. Verify both arm sides with a tape.`
-                          : sourceLabel
-                        : undefined
-                    }
-                    role={showSourceMarker ? 'img' : undefined}
-                  />
-                  {wasMeasurementAcquired(key, acquiredMeasurements) && (
-                    <span
-                      className="live-acquired-check"
-                      role="img"
-                      aria-label="Camera measurement acquired"
-                      title="Camera measurement acquired"
-                    >
-                      ✓
-                    </span>
-                  )}
-                  <span className="live-estimate-accessible-state">
-                    {progress.label}. {sourceLabel}
-                    {wasMeasurementAcquired(key, acquiredMeasurements) &&
-                      '. Camera measurement acquired'}
-                  </span>
-                </dt>
-                <dd
-                  className={`live-measurement-value${displayValue === null ? ' is-estimating' : ''}`}
-                >
-                  {displayValue === null ? (
-                    'Estimating…'
-                  ) : (
-                    <>
-                      <span>{displayValue}</span>
-                      <span className="live-measurement-unit">cm</span>
-                    </>
-                  )}
-                </dd>
-                {rangeCm !== null && (
-                  <dd
-                    className="live-uncertainty"
-                    aria-label={`Approximately plus or minus ${rangeCm} centimetres; ${rangeKind}. This is not a validated personal accuracy range.`}
-                  >
-                    <span aria-hidden="true">±{rangeCm} cm</span>
-                    <span className="live-range-kind">
-                      {estimate.source === 'prior' ? 'pop.' : 'working'}
-                    </span>
-                  </dd>
-                )}
-              </div>
-            );
-          })}
+          {estimates.map(
+            ({
+              estimate,
+              active,
+              acquired,
+              uncertainty,
+              fraction,
+              durationMs,
+            }) => {
+              const cameraValue =
+                uncertainty === undefined ? undefined : estimate.cameraValueCm;
+              const valueCm = cameraValue ?? estimate.valueCm;
+              const state = acquired
+                ? 'acquired'
+                : active
+                  ? uncertainty === undefined
+                    ? 'measuring'
+                    : 'refining'
+                  : 'pending';
+              const status = acquired
+                ? 'Acquired'
+                : active
+                  ? uncertainty === undefined
+                    ? 'Measuring'
+                    : 'Refining'
+                  : snapshot.complete && uncertainty !== undefined
+                    ? 'Target not reached'
+                    : snapshot.complete ||
+                        ('status' in estimate &&
+                          estimate.status === 'Insufficient Data')
+                      ? 'Insufficient data'
+                      : uncertainty !== undefined
+                        ? 'Awaiting refinement'
+                        : estimate.source === 'prior'
+                          ? 'Population reference'
+                          : 'Pending';
+              const range =
+                uncertainty ??
+                (estimate.source === 'prior'
+                  ? estimate.rangeHalfWidthCm
+                  : null);
+              return (
+                <LiveEstimateCard
+                  key={estimate.key}
+                  label={progressiveLabels[estimate.key]}
+                  state={state}
+                  status={status}
+                  source={
+                    cameraValue === undefined ? estimate.source : 'camera'
+                  }
+                  value={valueCm === null ? null : Math.round(valueCm)}
+                  range={range === null ? null : formatPrecision(range)}
+                  fraction={fraction}
+                  durationMs={durationMs}
+                  active={active}
+                  armMismatch={estimate.key === 'arm' && armMismatch}
+                />
+              );
+            },
+          )}
         </dl>
+        {adaptive?.mesh && (
+          <details className="live-estimates-about">
+            <summary>View reconstructed torso</summary>
+            <MeshPreview
+              mesh={adaptive.mesh}
+              label="Interactive torso surface interpolated between observed cross-sections."
+            />
+            <p>
+              Observed cross-sections anchor this model. The surface between
+              them is interpolated.
+            </p>
+          </details>
+        )}
+        {adaptive && process.env.NODE_ENV === 'development' && (
+          <details className="live-estimates-about">
+            <summary>Development diagnostics</summary>
+            {timings && (
+              <p>
+                Latest frame · detector {timings.inferenceMs.toFixed(1)} ms ·
+                geometry including worker transfer{' '}
+                {timings.geometryMs.toFixed(1)} ms ·{' '}
+                {timings.processingFps.toFixed(1)} processed frames per second
+              </p>
+            )}
+            <p>
+              {adaptive.calibrated
+                ? 'Metric anchor established'
+                : 'Relative observations only'}
+            </p>
+            <ul>
+              {adaptive.evidence.map((item) => (
+                <li key={item.key}>
+                  {progressiveLabels[item.key]} · {item.informativeFrames}{' '}
+                  frames · {item.angleBuckets} angles ·{' '}
+                  {Math.round(item.coverage * 100)}% coverage ·{' '}
+                  {item.visible ? 'visible' : 'out of view'}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <p className="live-estimates-disclosure">
-          Experimental estimates only. Ranges are population variation or
-          unvalidated working ranges, not personal accuracy; confirm with a tape
-          before garment production.
+          Bars track camera repeatability against a ±{c.precision.targetCm} cm
+          target. Population ranges show reference variation. Confirm all
+          estimates with a tape before garment production.
         </p>
         <details className="live-estimates-about">
           <summary>About these estimates</summary>
@@ -989,9 +1056,10 @@ function CameraRun({
               proxy. Arm-side differences may require separate tape checks.
             </p>
             <p>
-              Population variation and camera working ranges are not calibrated
-              personal error bounds or confidence probabilities. The measurement
-              engine is experimental and does not guarantee fit.
+              Population variation and camera repeatability ranges are
+              uncalibrated. An acquired measurement reached the repeatability
+              target with stable observations. The measurement engine is
+              experimental and does not guarantee fit.
             </p>
             <a
               href="https://www.openlab.psu.edu/datasets/ansur2/"

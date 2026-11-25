@@ -5,5 +5,11 @@ export const dynamic = 'force-dynamic';
 
 export default async function Measure() {
   const access = await measurementAccess('/measure');
-  return <GuidedMeasurement key={access.userId ?? 'guest'} access={access} />;
+  return (
+    <GuidedMeasurement
+      key={access.userId ?? 'guest'}
+      access={access}
+      multiView={process.env.CONTOURSTITCH_PROGRESSIVE_ENGINE === '1'}
+    />
+  );
 }

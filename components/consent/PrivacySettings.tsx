@@ -4,6 +4,7 @@ import { profileDate } from '@/lib/accounts/dates';
 import { agreementReviewPath } from '@/lib/auth/return-path';
 import {
   agreements,
+  isArchivedAgreement,
   type Agreement,
   type ConsentState,
 } from '@/lib/consent/agreements';
@@ -27,6 +28,7 @@ export function PrivacySettings({
 }) {
   const archived = acceptedVersions.filter(
     ({ type, agreementVersion }) =>
+      isArchivedAgreement(type) ||
       agreementVersion !== agreements[type].version,
   );
   return (
@@ -41,11 +43,15 @@ export function PrivacySettings({
         {reviewableAgreements(state).map(({ type, event, active }) => (
           <div key={type}>
             <dt>
-              <AgreementLink type={type} />
+              {type === 'BODY_MEASUREMENT' && !active ? (
+                'Measurement consent'
+              ) : (
+                <AgreementLink type={type} />
+              )}
             </dt>
             <dd>
               {active && event?.acceptedAt
-                ? `${type === 'PRIVACY' || type === 'ACCURACY' ? 'Acknowledged' : 'Accepted'} ${profileDate(event.acceptedAt)}`
+                ? `${type === 'PRIVACY' ? 'Acknowledged' : 'Accepted'} ${profileDate(event.acceptedAt)}`
                 : event?.status === 'REVOKED' && event.revokedAt
                   ? `Withdrawn ${profileDate(event.revokedAt)}`
                   : event?.status === 'ACCEPTED'
@@ -59,11 +65,15 @@ export function PrivacySettings({
                     Version {event.agreementVersion}
                   </span>
                 )}
-              {type === 'CAMERA' && event?.status === 'ACCEPTED' && (
+              {type === 'BODY_MEASUREMENT' && (
                 <ConsentPreference
-                  key={`camera-${event.status}`}
+                  key={`body-measurement-${active}`}
                   userId={userId}
-                  choice="revoke-camera"
+                  choice={
+                    active
+                      ? 'revoke-body-measurement'
+                      : 'allow-body-measurement'
+                  }
                 />
               )}
               {type === 'IMPROVEMENT' && (

@@ -3,7 +3,13 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ReconstructionMesh } from '@/lib/reconstruction/types';
 
-export function MeshPreview({ mesh }: { mesh: ReconstructionMesh }) {
+export function MeshPreview({
+  mesh,
+  label = 'Interactive voxel surface reconstruction; drag to rotate, or use the arrow keys.',
+}: {
+  mesh: ReconstructionMesh;
+  label?: string;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const pointer = useRef<{ x: number; y: number } | null>(null);
   const [rotation, setRotation] = useState({ yaw: -0.55, pitch: 0.12 });
@@ -83,7 +89,7 @@ export function MeshPreview({ mesh }: { mesh: ReconstructionMesh }) {
       <canvas
         ref={canvas}
         tabIndex={0}
-        aria-label="Interactive voxel surface reconstruction; drag to rotate, or use the arrow keys."
+        aria-label={label}
         onPointerDown={(event) => {
           pointer.current = { x: event.clientX, y: event.clientY };
           event.currentTarget.setPointerCapture(event.pointerId);

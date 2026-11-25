@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --no-experimental-webstorage node_modules/vitest/vitest.mjs run",
+    "benchmark:multiview": "CONTOURSTITCH_BENCHMARK=1 npm test -- --disableConsoleIntercept tests/multiview-benchmark.test.ts",
     "test:e2e": "playwright test",
     "format": "prettier --write .",
     "postinstall": "prisma generate && node scripts/prepare-onnx.mjs",

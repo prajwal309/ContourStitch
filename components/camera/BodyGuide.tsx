@@ -1,18 +1,22 @@
-type FocusRegion = 'upper-body' | 'arms' | 'torso' | 'neck' | null;
+import { memo } from 'react';
 
-export function BodyGuide({
+export const BodyGuide = memo(function BodyGuide({
   side = false,
-  focus = null,
+  focus,
 }: {
   side?: boolean;
-  focus?: FocusRegion;
+  focus?: string;
 }) {
   return (
     <svg
       viewBox="0 0 300 500"
       className="body-guide"
-      data-focus={focus ?? undefined}
-      aria-label={side ? 'Side body positioning outline' : 'Front body positioning outline'}
+      data-focus={focus}
+      aria-label={
+        side
+          ? 'Side body positioning outline'
+          : 'Front body positioning outline'
+      }
       role="img"
     >
       <g
@@ -41,11 +45,48 @@ export function BodyGuide({
         strokeWidth="4"
         strokeLinecap="round"
       >
-        <path className="body-guide__region body-guide__region--neck" d="M133 94 H167" />
-        <path className="body-guide__region body-guide__region--shoulders" d="M113 105 H187" />
-        <path className="body-guide__region body-guide__region--torso" d="M112 175 H188 M106 240 H194" />
-        <path className="body-guide__region body-guide__region--arms" d="M112 111 L61 243 M188 111 L239 243" />
+        <path
+          className="body-guide__region body-guide__region--neck"
+          d="M133 94 H167"
+        />
+        <path
+          className="body-guide__region body-guide__region--shoulders"
+          d="M113 105 H187"
+        />
+        {focus === undefined ? (
+          <path
+            className="body-guide__region body-guide__region--torso"
+            d="M112 175 H188 M106 240 H194"
+          />
+        ) : (
+          <>
+            <path
+              className="body-guide__region body-guide__region--chest"
+              d={side ? 'M125 175 H174' : 'M112 175 H188'}
+            />
+            <path
+              className="body-guide__region body-guide__region--waist"
+              d={side ? 'M120 214 H174' : 'M118 214 H182'}
+            />
+            <path
+              className="body-guide__region body-guide__region--hips"
+              d={side ? 'M124 252 H180' : 'M115 252 H185'}
+            />
+            <path
+              className="body-guide__region body-guide__region--torso"
+              d="M150 113 V242"
+            />
+            <path
+              className="body-guide__region body-guide__region--legs"
+              d="M133 286 L117 432 M167 286 L183 432"
+            />
+          </>
+        )}
+        <path
+          className="body-guide__region body-guide__region--arms"
+          d="M112 111 L61 243 M188 111 L239 243"
+        />
       </g>
     </svg>
   );
-}
+});

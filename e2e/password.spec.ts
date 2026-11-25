@@ -60,7 +60,7 @@ test('creates and signs in to an account with a password, with consent and a rev
       await db.passwordLogin.findUnique({ where: { username } }),
     ).toBeNull();
     for (const checkbox of await page
-      .getByRole('group', { name: 'Required agreement' })
+      .getByRole('group', { name: 'Required agreements' })
       .getByRole('checkbox')
       .all()) {
       await checkbox.check();
@@ -89,7 +89,7 @@ test('creates and signs in to an account with a password, with consent and a rev
     expect(login.user.accounts).toHaveLength(0);
     expect(
       login.user.consentEvents.filter(({ status }) => status === 'ACCEPTED'),
-    ).toHaveLength(4);
+    ).toHaveLength(3);
     expect(
       login.user.consentEvents.find(({ type }) => type === 'IMPROVEMENT')
         ?.status,
@@ -182,6 +182,11 @@ test('rejects breached passwords and duplicate registrations and resets a passwo
     await target.goto('/sign-in?mode=register&next=%2Faccount');
     await target
       .getByRole('checkbox', { name: /^I agree to the Terms/ })
+      .check();
+    await target
+      .getByRole('checkbox', {
+        name: /^I agree to the Body Measurement Consent/,
+      })
       .check();
     await target.getByLabel('Username', { exact: true }).fill(username);
     await target.getByLabel('Password', { exact: true }).fill(password);

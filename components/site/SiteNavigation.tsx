@@ -1,5 +1,6 @@
 'use client';
 
+import { measurementCopy } from '@/lib/measurement/copy';
 import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowUpRight, Menu } from 'lucide-react';
@@ -41,7 +42,8 @@ export function SiteNavigation() {
             className="brand-header-cta"
             onClick={closeMenu}
           >
-            Start Measuring <ArrowUpRight size={16} aria-hidden="true" />
+            {measurementCopy.camera}{' '}
+            <ArrowUpRight size={16} aria-hidden="true" />
           </Link>
           <details
             className="brand-mobile-menu"

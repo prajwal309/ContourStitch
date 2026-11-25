@@ -6,12 +6,17 @@ import { updateConsentPreference } from '@/lib/consent/actions';
 import { agreements } from '@/lib/consent/agreements';
 import { deleteProfile } from '@/lib/storage/profile';
 import { useSession } from '@/components/SessionProvider';
-import { AgreementLink } from './AgreementFields';
+import { AgreementLink, BodyMeasurementAgreement } from './AgreementFields';
 
-type Choice = 'revoke-camera' | 'revoke-improvement' | 'allow-improvement';
+type Choice =
+  | 'revoke-body-measurement'
+  | 'allow-body-measurement'
+  | 'revoke-improvement'
+  | 'allow-improvement';
 
 const choiceLabels = {
-  'revoke-camera': 'Withdraw camera consent',
+  'revoke-body-measurement': 'Withdraw measurement consent',
+  'allow-body-measurement': 'Save measurement consent',
   'revoke-improvement': 'Withdraw optional consent',
   'allow-improvement': 'Save optional consent',
 };
@@ -30,6 +35,7 @@ export function ConsentPreference({
   return (
     <form className="agreement-flow" action={action}>
       <input type="hidden" name="choice" value={choice} />
+      {choice === 'allow-body-measurement' && <BodyMeasurementAgreement />}
       {choice === 'allow-improvement' && (
         <>
           <input

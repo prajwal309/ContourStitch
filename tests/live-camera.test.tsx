@@ -4,7 +4,7 @@ import { LiveMeasurementCamera } from '@/components/live-measurement/LiveMeasure
 
 afterEach(() => vi.restoreAllMocks());
 
-it('offers retry and tape entry after camera denial', async () => {
+it('offers retry and manual entry after camera denial', async () => {
   const engineFactory = vi.fn();
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
@@ -29,7 +29,7 @@ it('offers retry and tape entry after camera denial', async () => {
     screen.getByRole('button', { name: 'Try camera again' }),
   ).toBeVisible();
   expect(
-    screen.getByRole('button', { name: 'Enter tape measurements instead' }),
+    screen.getByRole('button', { name: 'Enter measurements manually' }),
   ).toBeVisible();
   expect(engineFactory).not.toHaveBeenCalled();
 });

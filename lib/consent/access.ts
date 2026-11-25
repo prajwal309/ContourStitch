@@ -5,7 +5,7 @@ import { currentUser } from '@/lib/auth/auth';
 import { agreementReviewPath, signInFor } from '@/lib/auth/return-path';
 import {
   accountAgreements,
-  measurementAgreementsToConfirm,
+  measurementAgreements,
   missingAgreements,
 } from './agreements';
 import { hasAccountAgreements, readConsent } from './store';
@@ -25,6 +25,6 @@ export async function measurementAccess(path: string) {
     redirect(agreementReviewPath(path));
   return {
     userId: user?.id ?? null,
-    required: measurementAgreementsToConfirm(state),
+    required: [...measurementAgreements],
   };
 }

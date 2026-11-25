@@ -1,8 +1,8 @@
 'use client';
 
+import { measurementCopy } from '@/lib/measurement/copy';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { LockKeyhole } from 'lucide-react';
 import { HeightForm } from '@/components/measurement/HeightForm';
 import { LiveMeasurementCamera } from '@/components/live-measurement/LiveMeasurementCamera';
@@ -14,7 +14,13 @@ import {
 } from '@/components/consent/MeasurementConsentForm';
 import type { MeasurementReport } from '@/lib/measurement/types';
 
-export function GuidedMeasurement({ access }: { access: MeasurementAccess }) {
+export function GuidedMeasurement({
+  access,
+  multiView = false,
+}: {
+  access: MeasurementAccess;
+  multiView?: boolean;
+}) {
   const [step, setStep] = useState<'consent' | 'calibration' | 'scan'>(
     'consent',
   );
@@ -29,8 +35,12 @@ export function GuidedMeasurement({ access }: { access: MeasurementAccess }) {
     router.push('/results');
   }
 
-  const tapeEntry = () =>
-    review({ source: 'live-video', estimates: [], missing: {} });
+  const enterManually = () =>
+    review({
+      source: multiView ? 'progressive-video' : 'live-video',
+      estimates: [],
+      missing: {},
+    });
 
   return (
     <main
@@ -41,19 +51,21 @@ export function GuidedMeasurement({ access }: { access: MeasurementAccess }) {
         <p className="eyebrow">One measure. Endless fits.</p>
         <h1>
           {step === 'consent'
-            ? 'Guided video measurements'
+            ? measurementCopy.camera
             : step === 'calibration'
               ? 'Set your scale'
-              : 'Follow the poses'}
+              : multiView
+                ? 'Live measurement'
+                : 'Follow the poses'}
         </h1>
         {step === 'consent' && (
           <>
             <LockKeyhole className="privacy-icon" aria-hidden="true" />
             <p>Your body. Your data. Your choice.</p>
             <p>
-              Use five guided poses to estimate seven body measurements as
-              evidence becomes available. You can review and correct them before
-              saving a fit profile.
+              {multiView
+                ? 'Move slowly so the camera can observe different parts of your body. Review and correct the estimates before saving a fit profile.'
+                : 'Use five guided poses to estimate seven body measurements as evidence becomes available. You can review and correct them before saving a fit profile.'}
             </p>
             <ul className="privacy-list">
               <li>
@@ -61,8 +73,9 @@ export function GuidedMeasurement({ access }: { access: MeasurementAccess }) {
                 your arms and turn.
               </li>
               <li>
-                Keep the camera level with your entire body in view. Ask anyone
-                nearby to step out of frame.
+                {multiView
+                  ? 'Keep the camera level and ask anyone nearby to step out of frame.'
+                  : 'Keep the camera level with your entire body in view. Ask anyone nearby to step out of frame.'}
               </li>
               <li>
                 Camera frames are processed in this browser. Video is never
@@ -79,12 +92,13 @@ export function GuidedMeasurement({ access }: { access: MeasurementAccess }) {
               onContinue={() => setStep('calibration')}
               label="Continue privately →"
             />
-            <button type="button" className="text-button" onClick={tapeEntry}>
-              Enter tape measurements instead
+            <button
+              type="button"
+              className="text-button"
+              onClick={enterManually}
+            >
+              {measurementCopy.manualOption}
             </button>
-            <Link className="text-button" href="/measure/experimental">
-              Compare experimental measurement engines
-            </Link>
           </>
         )}
         {step === 'calibration' && (
@@ -108,14 +122,19 @@ export function GuidedMeasurement({ access }: { access: MeasurementAccess }) {
                 setStep('scan');
               }}
             />
-            <button type="button" className="text-button" onClick={tapeEntry}>
-              Enter tape measurements instead
+            <button
+              type="button"
+              className="text-button"
+              onClick={enterManually}
+            >
+              {measurementCopy.enterManually}
             </button>
           </>
         )}
         {step === 'scan' && (
           <LiveMeasurementCamera
             heightCm={height}
+            multiView={multiView}
             useReference={reference}
             verifyCameraAccess={verifyCameraAccess}
             onReview={review}

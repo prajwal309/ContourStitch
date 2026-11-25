@@ -98,7 +98,7 @@ function orientationInstruction(frame: VisionFrame, pose: Pose) {
     : 'Turn slightly to your right until you face the camera.';
 }
 
-export function frameFraming(frame: VisionFrame): {
+export function silhouetteQuality(frame: VisionFrame): {
   bounds: Bounds | null;
   message: string | null;
 } {
@@ -118,6 +118,15 @@ export function frameFraming(frame: VisionFrame): {
       'Stand against a clear background so your outline is visible.',
     );
 
+  return { bounds, message: null };
+}
+
+export function frameFraming(frame: VisionFrame) {
+  const quality = silhouetteQuality(frame);
+  const { bounds } = quality;
+  const mask = frame.mask;
+  if (!bounds || !mask) return quality;
+  const retry = (message: string) => ({ bounds: null, message });
   const margin = c.margin;
   if (
     bounds.left < mask.width * margin ||

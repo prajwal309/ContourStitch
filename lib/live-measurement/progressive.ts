@@ -1,4 +1,5 @@
 import { liveConfig } from './config';
+import type { CameraPrecision } from './precision';
 import {
   anthropometricPrior,
   progressiveMeasurementKeys,
@@ -6,18 +7,17 @@ import {
 } from './anthropometric-priors';
 import type { Pose } from './guidance';
 import type { Sample } from './estimator';
-import type { MeasurementEstimate, MeasurementReport } from '@/lib/measurement/types';
+import type {
+  MeasurementEstimate,
+  MeasurementReport,
+} from '@/lib/measurement/types';
 import { ellipseCircumference } from '@/lib/measurement/circumference';
 import { median } from '@/lib/measurement/silhouette';
 
 export { progressiveMeasurementKeys };
 export type { ProgressiveMeasurementKey };
 
-export type ProgressiveSource =
-  | 'prior'
-  | 'blended'
-  | 'camera'
-  | 'unavailable';
+export type ProgressiveSource = 'prior' | 'blended' | 'camera' | 'unavailable';
 
 export type ProgressiveEstimate = {
   key: ProgressiveMeasurementKey;
@@ -31,6 +31,7 @@ export type ProgressiveEstimate = {
   observedViews: number;
   requiredViews: number;
   sampleCount: number;
+  cameraPrecision?: CameraPrecision;
 };
 
 export const measurementDependencies: Record<
@@ -91,9 +92,7 @@ export const measurementDependencies: Record<
 type SamplesByPose = Partial<Record<Pose, readonly Sample[]>>;
 
 function averageSides(sample: Sample) {
-  return sample.arms
-    ? (sample.arms.left + sample.arms.right) / 2
-    : undefined;
+  return sample.arms ? (sample.arms.left + sample.arms.right) / 2 : undefined;
 }
 
 function validValues(values: (number | null | undefined)[]) {
@@ -142,22 +141,97 @@ function measurementValues(
   );
 }
 
+function readingFor(key: ProgressiveMeasurementKey, sample: Sample) {
+  if (key === 'shoulder')
+    return sample.shoulder === undefined ? null : [sample.shoulder];
+  if (key === 'arm' || key === 'sleeve')
+    return sample.arms ? [sample.arms.left, sample.arms.right] : null;
+  if (key === 'torso')
+    return sample.torsoCm === undefined ? null : [sample.torsoCm];
+  if (key === 'inseam') return null;
+
+  const width = sample.widths[key];
+  return width === undefined ? null : [width];
+}
+
 function relevantSamples(
   key: ProgressiveMeasurementKey,
   samples: SamplesByPose,
 ) {
   const { requiredViews, optionalViews } = measurementDependencies[key];
   return [...requiredViews, ...optionalViews].flatMap((pose) =>
-    (samples[pose] ?? []).filter((sample) => {
-      if (key === 'shoulder') return sample.shoulder !== undefined;
-      if (key === 'arm') return sample.arms !== undefined && pose === 'extended';
-      if (key === 'sleeve')
-        return sample.arms !== undefined && (pose === 'front' || pose === 'back');
-      if (key === 'torso') return sample.torsoCm !== undefined;
-      if (key === 'inseam') return false;
-      return sample.widths[key] !== undefined;
-    }),
+    (samples[pose] ?? []).filter((sample) => readingFor(key, sample) !== null),
   );
+}
+
+function envelope(values: number[], resolution: number) {
+  return {
+    low: Math.max(0, Math.min(...values) - resolution),
+    high: Math.max(...values) + resolution,
+    middle: median(values)!,
+  };
+}
+
+/** Camera-only repeatability envelope. Each view contributes one range, regardless of frame pairing. */
+function cameraPrecisionFor(
+  key: ProgressiveMeasurementKey,
+  samples: SamplesByPose,
+  confirmed: boolean,
+): CameraPrecision | undefined {
+  const { requiredViews, optionalViews } = measurementDependencies[key];
+  if (!requiredViews.length) return;
+  const observed = [...requiredViews, ...optionalViews].map((pose) => {
+    const window = samples[pose] ?? [];
+    const usable = window.flatMap((sample) => {
+      const values = readingFor(key, sample);
+      return values ? [{ values, resolution: sample.resolutionCm ?? 0 }] : [];
+    });
+    const count = liveConfig.precision.stableObservations;
+    const stable =
+      window.length >= count &&
+      window.slice(-count).every((sample) => readingFor(key, sample) !== null);
+    return { usable, stable };
+  });
+  if (
+    observed
+      .slice(0, requiredViews.length)
+      .some(({ usable }) => usable.length < 2)
+  )
+    return;
+
+  const lowerBoundCm = 0.1; // Avoid implying zero repeatability error at display precision.
+  const range = (readings: (typeof observed)[number]['usable'], axis: number) =>
+    envelope(
+      readings.map(({ values }) => values[axis]),
+      Math.max(0, ...readings.map(({ resolution }) => resolution)),
+    );
+
+  let uncertaintyCm: number;
+  if (requiredViews.length === 2) {
+    const [front, side, rear] = observed;
+    // Neck is observed side first; ellipse circumference is symmetric in its two axes.
+    const first = range([...front.usable, ...(rear?.usable ?? [])], 0);
+    const second = range(side.usable, 0);
+    const center = ellipseCircumference(first.middle, second.middle)!;
+    const low = ellipseCircumference(first.low, second.low) ?? 0;
+    const high = ellipseCircumference(first.high, second.high)!;
+    uncertaintyCm = Math.max(center - low, high - center);
+  } else {
+    const readings = observed.flatMap(({ usable }) => usable);
+    uncertaintyCm = Math.max(
+      ...readings[0].values.map((_, axis) => {
+        const { low, high, middle } = range(readings, axis);
+        return Math.max(middle - low, high - middle);
+      }),
+    );
+  }
+
+  return {
+    uncertaintyCm: Math.max(lowerBoundCm, uncertaintyCm),
+    stable:
+      confirmed &&
+      observed.every(({ usable, stable }) => !usable.length || stable),
+  };
 }
 
 function coverageFor(key: ProgressiveMeasurementKey, samples: SamplesByPose) {
@@ -181,9 +255,7 @@ function cameraEstimateFor(
   if (key === 'torso') {
     const values = measurementValues(key, samples);
     const valueCm = median(values);
-    return valueCm === null
-      ? undefined
-      : { valueCm };
+    return valueCm === null ? undefined : { valueCm };
   }
   const estimate = report.estimates.find((item) => item.key === key);
   return estimate ? { valueCm: estimate.valueCm } : undefined;
@@ -203,6 +275,7 @@ export function progressiveEstimates(
   report: MeasurementReport,
   samples: SamplesByPose,
   scanComplete = false,
+  confirmedReport = report,
 ): ProgressiveEstimate[] {
   return progressiveMeasurementKeys.map((key) => {
     const prior = anthropometricPrior(key, heightCm);
@@ -259,12 +332,25 @@ export function progressiveEstimates(
       rangeHalfWidthCm = 1.96 * Math.sqrt(variance);
     } else if (values.length > 1) {
       rangeHalfWidthCm =
-        1.96 * sampleDeviation(values) / Math.sqrt(values.length);
+        (1.96 * sampleDeviation(values)) / Math.sqrt(values.length);
     }
+
+    const confirmed = confirmedReport.estimates.some(
+      (item) => item.key === key,
+    );
+    const cameraPrecision =
+      cameraEstimate || confirmed
+        ? cameraPrecisionFor(
+            key,
+            samples,
+            cameraEstimate !== undefined && confirmed,
+          )
+        : undefined;
 
     return {
       key,
       valueCm,
+      ...(cameraPrecision && { cameraPrecision }),
       rangeHalfWidthCm,
       ...(prior && { priorValueCm: prior.valueCm }),
       ...(cameraValueCm !== undefined && { cameraValueCm }),

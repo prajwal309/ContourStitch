@@ -1,3 +1,4 @@
+import { measurementCopy } from '@/lib/measurement/copy';
 import Link from 'next/link';
 import { CloudProfileSources } from '@/components/accounts/CloudProfileSources';
 import { profileDate } from '@/lib/accounts/dates';
@@ -68,7 +69,7 @@ export default async function MyFitProfile() {
             </p>
           )}
           <Link className="text-button" href="/measure">
-            Start a new measurement →
+            {measurementCopy.camera} →
           </Link>
         </section>
       </section>

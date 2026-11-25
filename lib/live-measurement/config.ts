@@ -17,6 +17,7 @@ export const liveConfig = {
   maximumSpread: 0.1,
   crossViewTolerance: 0.14,
   asymmetryNoticeCm: 2,
+  precision: { targetCm: 2, stableObservations: 3 },
   minReferencePixels: 20,
   neckSamplingFraction: 0.73,
   minNeckBandFraction: 0.035,
