@@ -52,8 +52,11 @@ export async function readDatabaseUser() {
 
 export async function revokeDatabaseSession() {
   const token = await sessionToken();
-  if (token && authConfiguration.problems.length === 0) {
-    await database().session.deleteMany({ where: { sessionToken: token } });
+  try {
+    if (token && authConfiguration.problems.length === 0) {
+      await database().session.deleteMany({ where: { sessionToken: token } });
+    }
+  } finally {
+    (await cookies()).set(sessionCookie, '', { ...sessionOptions, maxAge: 0 });
   }
-  (await cookies()).set(sessionCookie, '', { ...sessionOptions, maxAge: 0 });
 }

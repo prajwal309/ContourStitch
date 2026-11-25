@@ -33,7 +33,7 @@ test('guest can save and reload measurements locally', async ({ page }) => {
   ).toBeVisible();
   if (!databaseUrl) {
     await expect(
-      page.getByText('Account sign-in is currently unavailable.'),
+      page.getByText(/Account sign-in is not configured for this deployment/),
     ).toBeVisible();
     expect((await page.request.get('/api/auth/providers')).status()).toBe(503);
     await page.getByRole('link', { name: 'Continue as a guest' }).click();
@@ -58,7 +58,7 @@ async function checkRegistration(page: Page, optional = false) {
     await expect(checkbox).not.toBeChecked();
   }
   for (const checkbox of await page
-    .getByRole('group', { name: 'Required agreements' })
+    .getByRole('group', { name: 'Required agreement' })
     .getByRole('checkbox')
     .all()) {
     await checkbox.check();
@@ -649,7 +649,9 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     await expect(db.user.findUnique({ where: { email } })).resolves.toBeNull();
     await page.goto('/sign-in?next=%2Faccount');
     await checkRegistration(page);
-    const legal = page.getByRole('link', { name: /^Body Measurement Consent/ });
+    const legal = page
+      .locator('main')
+      .getByRole('link', { name: /^Terms of Service/ });
     const [draft] = await Promise.all([
       page.waitForEvent('popup'),
       legal.click(),
@@ -659,7 +661,7 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     ).toBeVisible();
     await draft.close();
     await expect(
-      page.getByRole('checkbox', { name: /I consent to camera/ }),
+      page.getByRole('checkbox', { name: /I agree to the Terms of Service/ }),
     ).toBeChecked();
     await expect(
       page.getByRole('checkbox', { name: /used to improve/ }),

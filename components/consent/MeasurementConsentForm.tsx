@@ -3,6 +3,7 @@
 import { useActionState, useCallback } from 'react';
 import {
   authorizeMeasurement,
+  recheckMeasurementAccess,
   type AgreementActionState,
 } from '@/lib/consent/actions';
 import type { Agreement } from '@/lib/consent/agreements';
@@ -51,7 +52,7 @@ export function MeasurementConsentForm({
 export function useCameraAccessCheck(userId: string | null) {
   return useCallback(async () => {
     if (!userId) return;
-    const result = await authorizeMeasurement(userId, {}, new FormData());
+    const result = await recheckMeasurementAccess(userId);
     if (!result.saved)
       throw new DOMException(
         result.error ?? 'Review the current measurement agreements.',

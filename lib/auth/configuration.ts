@@ -11,15 +11,27 @@ const runtimeDatabaseKeys = [
   'DATABASE_URL',
   'POSTGRES_URL',
   'POSTGRES_URL_NON_POOLING',
+  'PRISMA_DATABASE_URL',
 ] as const;
 
-const migrationDatabaseKeys = [
+const directDatabaseKeys = [
   'DATABASE_URL',
   'POSTGRES_URL_NON_POOLING',
   'POSTGRES_URL',
+  'PRISMA_DATABASE_URL',
+] as const;
+
+const migrationDatabaseKeys = [
+  ...directDatabaseKeys,
   'POSTGRES_PRISMA_URL',
   'DATABASE_URL_POOLED',
 ] as const;
+
+function runtimeKeys(env: Environment) {
+  return env.DATABASE_CONNECTION_MODE?.trim() === 'direct'
+    ? directDatabaseKeys
+    : runtimeDatabaseKeys;
+}
 
 function firstConfigured(
   env: Environment,
@@ -61,7 +73,7 @@ function canonicalOrigin(value: string | undefined) {
 }
 
 export function databaseUrl(env: Environment = process.env) {
-  return firstConfigured(env, runtimeDatabaseKeys);
+  return firstConfigured(env, runtimeKeys(env));
 }
 
 export function migrationDatabaseUrl(env: Environment = process.env) {
@@ -97,9 +109,13 @@ export function inspectAuthConfiguration(env: Environment) {
       'AUTH_URL must be a valid application origin (HTTPS on Vercel)',
     );
   if (!isPostgresUrl(databaseUrl(env))) {
-    const key = configuredDatabaseKey(env, runtimeDatabaseKeys);
+    const key = configuredDatabaseKey(env, runtimeKeys(env));
+    const expected =
+      env.DATABASE_CONNECTION_MODE?.trim() === 'direct'
+        ? 'DATABASE_URL or another direct PostgreSQL variable'
+        : 'DATABASE_URL or a Vercel Postgres URL';
     problems.push(
-      `${key ?? 'DATABASE_URL or a Vercel Postgres URL'} must contain a PostgreSQL connection URL`,
+      `${key ?? expected} must contain a PostgreSQL connection URL`,
     );
   }
 

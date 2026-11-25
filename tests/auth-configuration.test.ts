@@ -134,3 +134,34 @@ describe('sign-in deployment configuration', () => {
     ).toBe(pooled);
   });
 });
+
+it('selects an explicit direct runtime connection during a pooler outage', () => {
+  const direct = 'postgresql://localhost/direct';
+  const pooled = 'postgresql://localhost/pooled';
+  const env = {
+    ...configured,
+    DATABASE_URL: direct,
+    DATABASE_URL_POOLED: pooled,
+  };
+  expect(databaseUrl(env)).toBe(pooled);
+  expect(databaseUrl({ ...env, DATABASE_CONNECTION_MODE: 'direct' })).toBe(
+    direct,
+  );
+  expect(
+    databaseUrl({
+      ...env,
+      DATABASE_URL: undefined,
+      PRISMA_DATABASE_URL: direct,
+      DATABASE_CONNECTION_MODE: 'direct',
+    }),
+  ).toBe(direct);
+  expect(
+    inspectAuthConfiguration({
+      ...env,
+      DATABASE_URL: undefined,
+      DATABASE_CONNECTION_MODE: 'direct',
+    }).problems,
+  ).toContain(
+    'DATABASE_URL or another direct PostgreSQL variable must contain a PostgreSQL connection URL',
+  );
+});

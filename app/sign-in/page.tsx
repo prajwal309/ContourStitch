@@ -11,8 +11,11 @@ import {
 } from '@/lib/auth/auth';
 import { accountReturnPath, agreementReviewPath } from '@/lib/auth/return-path';
 
-import { AgreementFields } from '@/components/consent/AgreementFields';
-import { registrationAgreements } from '@/lib/consent/agreements';
+import { RegistrationAgreementFields } from '@/components/consent/AgreementFields';
+import {
+  accountFailure,
+  configurationFeedback,
+} from '@/lib/auth/access-errors';
 import { PasswordForm } from '@/components/accounts/PasswordForm';
 
 const googleSans = localFont({
@@ -40,8 +43,9 @@ const errorMessages: Record<string, string> = {
     'Review and accept the current required agreements to create an account.',
   RegistrationRequired:
     'This sign-in method has no linked account. To create an account, review the agreements below. To connect another provider to an existing account, sign in with your original provider first.',
-  Configuration:
-    'Account sign-in is temporarily unavailable. You can still measure and save on this device.',
+  Configuration: configurationFeedback.error,
+  SignOut:
+    'This browser cleared the sign-in cookie, but we could not confirm the session ended. Try again shortly.',
 };
 
 export const metadata = { title: 'Sign in | ContourStitch' };
@@ -54,13 +58,21 @@ export default async function SignIn({
     next?: string;
     mode?: string;
     method?: string;
+    notice?: string;
   }>;
 }) {
-  const { error, next, mode, method } = await searchParams;
+  const { error, next, mode, method, notice } = await searchParams;
   const returnPath = accountReturnPath(next);
-  const user = await currentUser();
+  const { user, sessionError } = await currentUser().then(
+    (user) => ({ user, sessionError: undefined }),
+    (error: unknown) => ({
+      user: null,
+      sessionError: accountFailure('read-sign-in-session', error).error,
+    }),
+  );
   if (user && !error) redirect(agreementReviewPath(returnPath));
   const register = mode === 'register' && !user && accountSignInEnabled;
+  const recover = mode === 'recover' && !user && accountSignInEnabled;
   const providerRegistration =
     register && method === 'provider' && enabledProviders.length > 0;
   const nextQuery = `next=${encodeURIComponent(returnPath)}`;
@@ -83,13 +95,28 @@ export default async function SignIn({
     <main id="main" className="flow">
       <section className={`flow-card sign-in-card ${googleSans.variable}`}>
         <LockKeyhole className="privacy-icon" aria-hidden="true" />
-        <h1>{register ? 'Create an account' : 'Sign in'}</h1>
-        {register && <p>Your body. Your data. Your choice.</p>}
-        <p>
-          Save your fit profiles and open them on any device. Only measurements
-          you choose to save to your account are uploaded. Camera video stays in
-          your browser.
-        </p>
+        <h1>
+          {register
+            ? 'Create an account'
+            : recover
+              ? 'Reset your password'
+              : 'Sign in'}
+        </h1>
+        {recover && (
+          <p>
+            Use the one-time code saved from My Account. If you sign in through
+            a provider, recover access there.
+          </p>
+        )}
+        {!recover && <p>Save your fit profiles and open them on any device.</p>}
+        {notice === 'PasswordReset' && (
+          <p role="status">Password updated. Sign in with your new password.</p>
+        )}
+        {sessionError && (
+          <p role="alert" className="error">
+            {sessionError}
+          </p>
+        )}
         {error && (
           <p role="alert" className="error">
             {Object.hasOwn(errorMessages, error)
@@ -110,20 +137,22 @@ export default async function SignIn({
                     action={registerOAuth.bind(null, returnPath)}
                     className="agreement-flow"
                   >
-                    <AgreementFields
-                      types={registrationAgreements}
-                      showOptional
-                    />
+                    <RegistrationAgreementFields />
                     {providerButtons}
                   </form>
                 ) : (
                   <PasswordForm
-                    key={register ? 'register' : 'sign-in'}
-                    register={register}
+                    key={
+                      register ? 'register' : recover ? 'recover' : 'sign-in'
+                    }
+                    mode={
+                      register ? 'register' : recover ? 'recover' : 'sign-in'
+                    }
                     next={returnPath}
                   />
                 )}
                 {!register &&
+                  !recover &&
                   enabledProviders.map(({ id }, index) => (
                     <form
                       action={startOAuth.bind(null, id, null, returnPath)}
@@ -143,16 +172,18 @@ export default async function SignIn({
                   </Link>
                 )}
                 <Link
-                  href={`/sign-in?${register ? '' : 'mode=register&'}${nextQuery}`}
+                  href={`/sign-in?${register || recover ? '' : 'mode=register&'}${nextQuery}`}
                   className="text-button"
                 >
                   {register
                     ? 'Already have an account? Sign in'
-                    : 'Create an account'}
+                    : recover
+                      ? 'Back to sign in'
+                      : 'Create an account'}
                 </Link>
               </>
             ) : (
-              <p className="muted">Account sign-in is currently unavailable.</p>
+              <p className="muted">{configurationFeedback.error}</p>
             )}
             <Link className="text-button" href="/measure">
               Continue as a guest

@@ -24,12 +24,6 @@ export function parseUsername(value: FormDataEntryValue | null) {
   return /^[a-z0-9][a-z0-9._-]{2,31}$/.test(username) ? username : null;
 }
 
-export function validPassword(value: unknown): value is string {
-  if (typeof value !== 'string' || value.length > 256) return false;
-  const length = Array.from(value).length;
-  return length >= 15 && length <= 128;
-}
-
 export async function hashPassword(password: string) {
   const salt = randomBytes(16);
   const key = await derive(password, salt);

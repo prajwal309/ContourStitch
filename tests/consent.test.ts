@@ -25,6 +25,10 @@ import {
   accountAgreements,
   cameraAgreements,
   missingAgreements,
+  checkedRegistrationVersions,
+  validRegistrationVersions,
+  registrationAgreements,
+  measurementAgreementsToConfirm,
   type ConsentState,
 } from '@/lib/consent/agreements';
 
@@ -100,7 +104,7 @@ describe('server consent checks', () => {
       saved: true,
     });
     expect(mocks.acceptMissing).toHaveBeenCalledWith(
-      acceptedAccount,
+      { ...acceptedAccount, CAMERA: undefined },
       cameraAgreements,
     );
   });
@@ -113,4 +117,37 @@ describe('server consent checks', () => {
     };
     expect(missingAgreements(state, accountAgreements)).toEqual(['TERMS']);
   });
+});
+
+it('requires the single registration check and each current version without making improvement consent mandatory', () => {
+  const form = new FormData();
+  for (const type of registrationAgreements)
+    form.set(`version-${type}`, agreements[type].version);
+  expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
+    false,
+  );
+  form.set('REGISTRATION', 'on');
+  expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
+    true,
+  );
+  form.set('version-CAMERA', 'stale');
+  expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
+    false,
+  );
+});
+
+it('asks separately for camera consent even if camera and accuracy were accepted at signup', () => {
+  const state = Object.fromEntries(
+    cameraAgreements.map((type) => [
+      type,
+      {
+        type,
+        status: 'ACCEPTED',
+        agreementVersion: agreements[type].version,
+        acceptedAt,
+        revokedAt: null,
+      },
+    ]),
+  ) as ConsentState;
+  expect(measurementAgreementsToConfirm(state)).toEqual(['CAMERA']);
 });

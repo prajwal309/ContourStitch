@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const activeDocuments = [
   { slug: 'terms', title: 'Terms of Service', version: '2' },
-  { slug: 'privacy', title: 'Privacy Policy', version: '4' },
+  { slug: 'privacy', title: 'Privacy Policy', version: '5' },
   {
     slug: 'body-measurement-consent',
     title: 'Body Measurement Consent',
@@ -33,7 +33,7 @@ test('serves versioned draft legal documents with dates and cross-links', async 
     );
     await expect(page.locator('.legal-version time')).toHaveAttribute(
       'dateTime',
-      '2026-11-24',
+      document.slug === 'privacy' ? '2026-11-25' : '2026-11-24',
     );
     await expect(page.locator('.legal-version')).toContainText(
       'Draft pending legal review',

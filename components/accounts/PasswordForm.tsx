@@ -1,21 +1,31 @@
 'use client';
 
+import Link from 'next/link';
 import { useActionState } from 'react';
 import { submitPassword } from '@/lib/auth/password-actions';
-import { registrationAgreements } from '@/lib/consent/agreements';
-import { AgreementFields } from '@/components/consent/AgreementFields';
+import { recoverPassword } from '@/lib/auth/recovery-actions';
+import { RegistrationAgreementFields } from '@/components/consent/AgreementFields';
+import { PasswordInput } from './PasswordInput';
 
 export function PasswordForm({
-  register,
+  mode,
   next,
 }: {
-  register: boolean;
+  mode: 'register' | 'sign-in' | 'recover';
   next: string;
 }) {
   const [state, action, pending] = useActionState(
-    submitPassword.bind(null, register ? 'register' : 'sign-in', next),
+    mode === 'recover'
+      ? recoverPassword.bind(null, next)
+      : submitPassword.bind(null, mode, next),
     {},
   );
+  const newPassword = mode !== 'sign-in';
+  const label = {
+    register: 'Create account',
+    'sign-in': 'Sign in',
+    recover: 'Reset password',
+  }[mode];
 
   return (
     <form action={action} className="agreement-flow studio-form password-form">
@@ -29,51 +39,53 @@ export function PasswordForm({
           autoCapitalize="none"
           spellCheck={false}
           maxLength={32}
-          aria-describedby={register ? 'username-rules' : undefined}
+          aria-describedby={mode === 'register' ? 'username-rules' : undefined}
           required
         />
-        {register && (
+        {mode === 'register' && (
           <p className="muted" id="username-rules">
-            Use 3–32 letters, numbers, dots, underscores, or hyphens. Start with
-            a letter or number.
+            3–32 letters, numbers, dots, underscores, or hyphens. Start with a
+            letter or number.
           </p>
         )}
       </div>
-      <div className="password-field">
-        <label htmlFor="account-password">Password</label>
-        <input
-          id="account-password"
-          name="password"
-          type="password"
-          autoComplete={register ? 'new-password' : 'current-password'}
-          maxLength={256}
-          aria-describedby={register ? 'password-rules' : undefined}
-          required
+      {mode === 'recover' && (
+        <div className="password-field">
+          <label htmlFor="account-recovery-code">Recovery code</label>
+          <input
+            id="account-recovery-code"
+            name="recovery-code"
+            type="text"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            maxLength={64}
+            required
+          />
+        </div>
+      )}
+      <PasswordInput
+        label={mode === 'recover' ? 'New password' : 'Password'}
+        autoComplete={newPassword ? 'new-password' : 'current-password'}
+        validateLength={newPassword}
+      />
+      {newPassword && (
+        <PasswordInput
+          label={
+            mode === 'recover' ? 'Confirm new password' : 'Confirm password'
+          }
+          name="confirm-password"
+          autoComplete="new-password"
         />
-        {register && (
-          <p className="muted" id="password-rules">
-            Use 15–128 characters. Save your password somewhere safe. Password
-            recovery is currently unavailable.
-          </p>
-        )}
-      </div>
-      {register && (
-        <>
-          <div className="password-field">
-            <label htmlFor="account-password-confirmation">
-              Confirm password
-            </label>
-            <input
-              id="account-password-confirmation"
-              name="confirm-password"
-              type="password"
-              autoComplete="new-password"
-              maxLength={256}
-              required
-            />
-          </div>
-          <AgreementFields types={registrationAgreements} showOptional />
-        </>
+      )}
+      {mode === 'register' && <RegistrationAgreementFields />}
+      {mode === 'sign-in' && (
+        <Link
+          className="text-button password-recovery-link"
+          href={`/sign-in?mode=recover&next=${encodeURIComponent(next)}`}
+        >
+          Forgot password?
+        </Link>
       )}
       {state.error && (
         <p className="error" role="alert">
@@ -81,7 +93,7 @@ export function PasswordForm({
         </p>
       )}
       <button className="button" type="submit" disabled={pending}>
-        {pending ? 'Please wait…' : register ? 'Create account' : 'Sign in'}
+        {pending ? 'Please wait…' : label}
       </button>
     </form>
   );

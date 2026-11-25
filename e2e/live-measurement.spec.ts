@@ -311,19 +311,18 @@ test('gives corrective guidance and confirms only accepted camera measurements',
     'aria-label',
     'Camera measurement acquired',
   );
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        (
-          window as Window & { __spokenInstructions?: string[] }
-        ).__spokenInstructions?.some((text) =>
-          text.includes(
-            'shoulder breadth and sleeve length measurements have been acquired',
-          ),
-        ),
+  const spokenInstructions = await page.evaluate(
+    () =>
+      (window as Window & { __spokenInstructions?: string[] })
+        .__spokenInstructions ?? [],
+  );
+  expect(spokenInstructions).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining(
+        'Shoulder breadth and sleeve length measurements have been acquired',
       ),
-    )
-    .toBe(true);
+    ]),
+  );
   expect(
     await page.evaluate(
       () =>

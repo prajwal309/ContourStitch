@@ -1,6 +1,6 @@
 export const agreements = {
   TERMS: { slug: 'terms', title: 'Terms of Service', version: '2' },
-  PRIVACY: { slug: 'privacy', title: 'Privacy Policy', version: '4' },
+  PRIVACY: { slug: 'privacy', title: 'Privacy Policy', version: '5' },
   CAMERA: {
     slug: 'body-measurement-consent',
     title: 'Body Measurement Consent',
@@ -58,6 +58,12 @@ export function missingAgreements(
   return required.filter((type) => !currentAcceptance(state, type));
 }
 
+export function measurementAgreementsToConfirm(state: ConsentState) {
+  return cameraAgreements.filter(
+    (type) => type === 'CAMERA' || !currentAcceptance(state, type),
+  );
+}
+
 export function matchesVersions(
   versions: ConsentVersions,
   required: readonly Agreement[],
@@ -71,6 +77,16 @@ export function validRegistrationVersions(versions: ConsentVersions) {
     (versions.IMPROVEMENT === undefined ||
       matchesVersions(versions, ['IMPROVEMENT']))
   );
+}
+
+export function checkedRegistrationVersions(form: FormData): ConsentVersions {
+  const versions = checkedVersions(form, ['IMPROVEMENT']);
+  if (form.get('REGISTRATION') !== 'on') return versions;
+  for (const type of registrationAgreements) {
+    const version = form.get(`version-${type}`);
+    if (typeof version === 'string') versions[type] = version;
+  }
+  return versions;
 }
 
 export function checkedVersions(

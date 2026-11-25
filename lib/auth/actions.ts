@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { authentication, currentUser, enabledProviders } from './auth';
+import { accountFailure } from './access-errors';
 import { revokeDatabaseSession } from './sessions';
 import { database } from './db';
 import { accountReturnPath, agreementReviewPath } from './return-path';
@@ -13,8 +14,7 @@ import {
 } from './oauth-intent';
 
 import {
-  agreementTypes,
-  checkedVersions,
+  checkedRegistrationVersions,
   matchesVersions,
   validRegistrationVersions,
   type ConsentVersions,
@@ -23,7 +23,7 @@ import { hasAccountAgreements } from '@/lib/consent/store';
 
 export async function registerOAuth(nextPath: string, form: FormData) {
   const provider = form.get('provider');
-  const versions = checkedVersions(form, agreementTypes);
+  const versions = checkedRegistrationVersions(form);
   if (
     typeof provider !== 'string' ||
     !validRegistrationVersions(versions) ||
@@ -110,7 +110,11 @@ async function beginOAuth(
 
 export async function leaveAccount() {
   (await cookies()).delete(oauthIntentCookie);
-  if (authentication) await authentication.signOut({ redirectTo: '/' });
-  else await revokeDatabaseSession();
+  try {
+    await revokeDatabaseSession();
+  } catch (error) {
+    accountFailure('sign-out', error);
+    redirect('/sign-in?error=SignOut');
+  }
   redirect('/');
 }

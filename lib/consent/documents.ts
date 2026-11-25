@@ -240,6 +240,13 @@ export const documents: Record<Agreement, Record<string, Document>> = {
     ],
     '3': privacyV3,
     '4': privacyV4,
+    '5': [
+      ...privacyV4,
+      {
+        title: 'Password screening and recovery',
+        text: 'When you create or reset a password, the server checks publicly documented breach data using Have I Been Pwned. The request sends only the first five characters of a SHA-1 password hash, without your username, full hash, or password. We store passwords as salted scrypt hashes. If you create a one-time recovery code, we store its hash and remove it when you use or replace the code. A password reset ends existing ContourStitch sessions.',
+      },
+    ],
   },
   CAMERA: {
     '1': [
@@ -370,6 +377,7 @@ export const documentLastUpdated: Record<
     '2': null,
     '3': '2026-11-24',
     '4': '2026-11-24',
+    '5': '2026-11-25',
   },
   CAMERA: { '1': null, '2': '2026-11-24', '3': '2026-11-24' },
   ACCURACY: { '1': null, '2': '2026-11-24', '3': '2026-11-24' },

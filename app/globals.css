@@ -1885,3 +1885,43 @@ progress {
   margin: 0;
   font-size: var(--text-small);
 }
+
+.password-input {
+  position: relative;
+}
+
+.password-input input[type='text'],
+.password-input input[type='password'] {
+  padding-inline-end: calc(var(--target) + var(--space-3));
+  margin-top: 0;
+}
+
+.password-input button {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  min-width: var(--target);
+  color: var(--primary);
+  border-radius: var(--radius-control);
+}
+
+.password-input button:hover {
+  background: var(--lavender);
+}
+
+.password-recovery-link {
+  justify-self: start;
+}
+
+.recovery-code {
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--lavender);
+}
+
+.recovery-code code {
+  overflow-wrap: anywhere;
+}

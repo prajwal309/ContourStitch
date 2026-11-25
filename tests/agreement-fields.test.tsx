@@ -1,42 +1,42 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { expect, it } from 'vitest';
-import { AgreementFields } from '@/components/consent/AgreementFields';
+import {
+  AgreementFields,
+  RegistrationAgreementFields,
+} from '@/components/consent/AgreementFields';
 
-it('keeps every consent statement and its legal link in one row', () => {
-  render(
-    <AgreementFields
-      types={['CAMERA', 'ACCURACY', 'TERMS', 'PRIVACY']}
-      showOptional
-    />,
+it('uses one required registration checkbox and an unchecked independent opt-in', () => {
+  render(<RegistrationAgreementFields />);
+  const required = within(
+    screen.getByRole('group', { name: 'Required agreement' }),
   );
+  const [checkbox] = required.getAllByRole('checkbox');
+  expect(required.getAllByRole('checkbox')).toHaveLength(1);
+  expect(checkbox).toHaveAccessibleName(
+    'I agree to the Terms of Service, acknowledge the Privacy Policy, and consent to camera-based body measurement processing. I understand that measurements are estimates.',
+  );
+  expect(checkbox).toBeRequired();
+  expect(checkbox).not.toBeChecked();
+  expect(
+    required.getByRole('link', { name: /Terms of Service/ }),
+  ).toHaveAttribute('target', '_blank');
+  expect(
+    required.getByRole('link', { name: /Privacy Policy/ }),
+  ).toHaveAttribute('target', '_blank');
+  const optional = within(
+    screen.getByRole('group', { name: 'Optional consent' }),
+  ).getByRole('checkbox');
+  expect(optional).not.toBeRequired();
+  expect(optional).not.toBeChecked();
+});
 
-  const pairs = [
-    [
-      'I consent to camera-based body measurement processing.',
-      /Body Measurement Consent/,
-    ],
-    [
-      'I understand that measurements are estimates and may contain errors.',
-      /Measurement Accuracy Disclaimer/,
-    ],
-    [
-      'I agree to the Terms of Service and acknowledge the Privacy Policy.',
-      /Terms of Service/,
-      /Privacy Policy/,
-    ],
-    [
-      'I allow my measurement data to be used to improve ContourStitch.',
-      /Optional Measurement Data Use/,
-    ],
-  ] as const;
-
-  for (const [statement, ...linkNames] of pairs) {
-    const checkbox = screen.getByLabelText(statement);
-    const row = checkbox.closest('.consent-with-agreement');
-    expect(row).not.toBeNull();
-    for (const linkName of linkNames)
-      expect(row).toContainElement(
-        screen.getByRole('link', { name: linkName }),
-      );
-  }
+it('keeps separate capture consent beside the camera agreement link', () => {
+  render(<AgreementFields types={['CAMERA', 'ACCURACY']} />);
+  const checkbox = screen.getByRole('checkbox', {
+    name: 'I consent to camera-based body measurement processing.',
+  });
+  expect(checkbox).toBeRequired();
+  expect(checkbox.closest('.consent-with-agreement')).toContainElement(
+    screen.getByRole('link', { name: /Body Measurement Consent/ }),
+  );
 });

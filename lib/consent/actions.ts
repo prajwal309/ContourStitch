@@ -9,12 +9,14 @@ import {
   cameraAgreements,
   checkedVersions,
   matchesVersions,
+  measurementAgreementsToConfirm,
   missingAgreements,
 } from './agreements';
 import {
   acceptMissing,
   changeConsent,
   hasAccountAgreements,
+  readConsent,
   withdraw,
 } from './store';
 
@@ -75,18 +77,34 @@ export async function authorizeMeasurement(
           'Review the current account agreements before starting. Reload this page to continue.';
         return [];
       }
-      const missing = missingAgreements(state, cameraAgreements);
+      const missing = measurementAgreementsToConfirm(state);
       if (!matchesVersions(versions, missing)) {
         error = changedAgreements;
         return [];
       }
-      return acceptMissing(state, cameraAgreements);
+      return acceptMissing({ ...state, CAMERA: undefined }, cameraAgreements);
     });
     if (!saved) return changedSession;
   } catch {
     return saveError;
   }
   return error ? { error } : { saved: true };
+}
+
+export async function recheckMeasurementAccess(
+  expectedUserId: string,
+): Promise<AgreementActionState> {
+  const user = await currentUser();
+  if (!user || user.id !== expectedUserId) return changedSession;
+  try {
+    const state = await readConsent(user.id);
+    return missingAgreements(state, [...accountAgreements, ...cameraAgreements])
+      .length
+      ? { error: changedAgreements }
+      : { saved: true };
+  } catch {
+    return saveError;
+  }
 }
 
 export async function updateConsentPreference(

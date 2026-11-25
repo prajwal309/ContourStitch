@@ -3,9 +3,9 @@ import { expect, it } from 'vitest';
 import {
   hashPassword,
   parseUsername,
-  validPassword,
   verifyPassword,
 } from '@/lib/auth/password';
+import { validPassword } from '@/lib/auth/password-policy';
 
 it('normalizes usernames and preserves case and spaces in passwords', () => {
   expect(parseUsername('  Stitch.Fan  ')).toBe('stitch.fan');

@@ -5,6 +5,7 @@ import { startOAuth, leaveAccount } from '@/lib/auth/actions';
 import { signInFor } from '@/lib/auth/return-path';
 import { database } from '@/lib/auth/db';
 import { DisplayNameForm } from '@/components/accounts/DisplayNameForm';
+import { RecoveryCodeForm } from '@/components/accounts/RecoveryCodeForm';
 import { PrivacySettings } from '@/components/consent/PrivacySettings';
 import { readAcceptedVersions, readConsent } from '@/lib/consent/store';
 
@@ -25,7 +26,7 @@ export default async function AccountPage() {
       readAcceptedVersions(user.id),
       database().passwordLogin.findUnique({
         where: { userId: user.id },
-        select: { username: true },
+        select: { username: true, recoveryCodeHash: true },
       }),
     ]);
 
@@ -75,6 +76,12 @@ export default async function AccountPage() {
               ),
             )}
           </div>
+          {passwordLogin && (
+            <RecoveryCodeForm
+              userId={user.id}
+              hasCode={Boolean(passwordLogin.recoveryCodeHash)}
+            />
+          )}
           <form action={leaveAccount}>
             <button type="submit" className="text-button">
               Sign out

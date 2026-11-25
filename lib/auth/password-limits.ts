@@ -21,7 +21,7 @@ async function consume(key: string, limit: number) {
 }
 
 export async function allowPasswordAttempt(
-  mode: 'register' | 'sign-in',
+  mode: 'register' | 'sign-in' | 'recover' | 'recovery-code',
   username: string,
 ) {
   // Vercel sets this header at its edge. Use a shared bucket without a trusted client address.
@@ -41,11 +41,11 @@ export async function allowPasswordAttempt(
   if (
     !(await consume(
       `${mode}:source:${sourceKey}`,
-      mode === 'register' ? 12 : 60,
+      mode === 'sign-in' ? 60 : 12,
     ))
   )
     return false;
   if (mode === 'register') return true;
   const usernameKey = createHash('sha256').update(username).digest('hex');
-  return consume(`sign-in:user:${usernameKey}`, 10);
+  return consume(`${mode}:user:${usernameKey}`, mode === 'sign-in' ? 10 : 5);
 }

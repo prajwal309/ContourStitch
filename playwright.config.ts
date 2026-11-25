@@ -8,6 +8,10 @@ const providerMock = fileURLToPath(
   new URL('./e2e/oauth-provider-mock.mjs', import.meta.url),
 );
 
+const screeningFixture = fileURLToPath(
+  new URL('./e2e/password-screening-fixture.mjs', import.meta.url),
+);
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
@@ -32,7 +36,12 @@ export default defineConfig({
           AUTH_FACEBOOK_SECRET: passwordOnly ? '' : 'test-facebook-secret',
           DATABASE_URL: testDatabase,
           DATABASE_URL_POOLED: testDatabase,
-          NODE_OPTIONS: passwordOnly ? '' : `--import="${providerMock}"`,
+          NODE_OPTIONS: [
+            !passwordOnly && `--import="${providerMock}"`,
+            `--import="${screeningFixture}"`,
+          ]
+            .filter(Boolean)
+            .join(' '),
         }
       : undefined,
     reuseExistingServer: false,

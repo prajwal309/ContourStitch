@@ -66,10 +66,11 @@ model Account {
 }
 
 model PasswordLogin {
-  userId       String @id
-  username     String @unique
-  passwordHash String
-  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId           String  @id
+  username         String  @unique
+  passwordHash     String
+  recoveryCodeHash String?
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model PasswordAttempt {

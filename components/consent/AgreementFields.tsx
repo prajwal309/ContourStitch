@@ -1,6 +1,7 @@
 import {
   agreementPath,
   agreements,
+  registrationAgreements,
   type Agreement,
 } from '@/lib/consent/agreements';
 
@@ -25,13 +26,7 @@ export function AgreementLink({
   );
 }
 
-export function AgreementFields({
-  types,
-  showOptional = false,
-}: {
-  types: readonly Agreement[];
-  showOptional?: boolean;
-}) {
+export function AgreementFields({ types }: { types: readonly Agreement[] }) {
   const account = types.includes('TERMS') || types.includes('PRIVACY');
   return (
     <>
@@ -108,33 +103,68 @@ export function AgreementFields({
           )}
         </fieldset>
       )}
-      {showOptional && (
-        <fieldset className="agreement-options">
-          <legend>Optional consent</legend>
+    </>
+  );
+}
+
+const registrationLabel =
+  'I agree to the Terms of Service, acknowledge the Privacy Policy, and consent to camera-based body measurement processing. I understand that measurements are estimates.';
+
+export function RegistrationAgreementFields() {
+  return (
+    <>
+      <fieldset className="agreement-options">
+        <legend>Required agreement</legend>
+        {registrationAgreements.map((type) => (
           <input
+            key={type}
             type="hidden"
-            name="version-IMPROVEMENT"
-            value={agreements.IMPROVEMENT.version}
+            name={`version-${type}`}
+            value={agreements[type].version}
           />
-          <div className="consent consent-with-agreement">
-            <input
-              id="optional-improvement-consent"
-              type="checkbox"
-              name="IMPROVEMENT"
-            />
-            <div>
-              <label htmlFor="optional-improvement-consent">
-                I allow my measurement data to be used to improve ContourStitch.
-              </label>{' '}
-              (<AgreementLink type="IMPROVEMENT" />)
-            </div>
+        ))}
+        <div className="consent consent-with-agreement">
+          <input
+            id="registration-consent"
+            type="checkbox"
+            name="REGISTRATION"
+            aria-label={registrationLabel}
+            required
+          />
+          <div>
+            <label htmlFor="registration-consent">I agree to the </label>
+            <AgreementLink type="TERMS" />
+            <label htmlFor="registration-consent">, acknowledge the </label>
+            <AgreementLink type="PRIVACY" />
+            <label htmlFor="registration-consent">
+              , and consent to camera-based body measurement processing. I
+              understand that measurements are estimates.
+            </label>
           </div>
-          <p className="muted">
-            You can use ContourStitch without sharing and withdraw permission in
-            My Account.
-          </p>
-        </fieldset>
-      )}
+        </div>
+      </fieldset>
+      <fieldset className="agreement-options">
+        <legend>Optional consent</legend>
+        <input
+          type="hidden"
+          name="version-IMPROVEMENT"
+          value={agreements.IMPROVEMENT.version}
+        />
+        <div className="consent consent-with-agreement">
+          <input
+            id="optional-improvement-consent"
+            type="checkbox"
+            name="IMPROVEMENT"
+          />
+          <div>
+            <label htmlFor="optional-improvement-consent">
+              I allow my measurement data to be used to improve ContourStitch.
+            </label>{' '}
+            (<AgreementLink type="IMPROVEMENT" />)
+          </div>
+        </div>
+        <p className="muted">Change this choice anytime in My Account.</p>
+      </fieldset>
     </>
   );
 }
