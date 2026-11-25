@@ -2,10 +2,25 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { LiveMeasurementCamera } from '@/components/live-measurement/LiveMeasurementCamera';
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 it('offers retry and manual entry after camera denial', async () => {
   const engineFactory = vi.fn();
+  const synthesis = Object.assign(new EventTarget(), {
+    getVoices: () => [{ name: 'English', lang: 'en-US', default: true }],
+    speak: vi.fn(),
+    cancel: vi.fn(),
+  });
+  vi.stubGlobal('speechSynthesis', synthesis);
+  vi.stubGlobal(
+    'SpeechSynthesisUtterance',
+    class {
+      constructor(readonly text: string) {}
+    },
+  );
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
     value: {
@@ -31,6 +46,8 @@ it('offers retry and manual entry after camera denial', async () => {
   expect(
     screen.getByRole('button', { name: 'Enter measurements manually' }),
   ).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Test voice' })).toBeEnabled();
+  expect(synthesis.speak).not.toHaveBeenCalled();
   expect(engineFactory).not.toHaveBeenCalled();
 });
 

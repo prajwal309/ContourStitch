@@ -1,7 +1,7 @@
 'use client';
 
 import { measurementCopy } from '@/lib/measurement/copy';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LockKeyhole } from 'lucide-react';
 import { HeightForm } from '@/components/measurement/HeightForm';
@@ -13,6 +13,8 @@ import {
   type MeasurementAccess,
 } from '@/components/consent/MeasurementConsentForm';
 import type { MeasurementReport } from '@/lib/measurement/types';
+import { poses } from '@/lib/live-measurement/guidance';
+import { VoiceGuidanceService } from '@/lib/voice/voice-guidance';
 
 export function GuidedMeasurement({
   access,
@@ -27,8 +29,11 @@ export function GuidedMeasurement({
   const verifyCameraAccess = useCameraAccessCheck(access.userId);
   const [reference, setReference] = useState(false);
   const [height, setHeight] = useState(170);
+  const [voiceService] = useState(() => new VoiceGuidanceService());
   const { setReport } = useSession();
   const router = useRouter();
+
+  useEffect(() => () => voiceService.dispose(), [voiceService]);
 
   function review(report: MeasurementReport) {
     setReport(report);
@@ -118,6 +123,8 @@ export function GuidedMeasurement({
             <HeightForm
               continueLabel="Start guided video →"
               onContinue={(cm) => {
+                voiceService.initialize();
+                voiceService.speak(poses[0].instruction, { repeat: true });
                 setHeight(cm);
                 setStep('scan');
               }}
@@ -134,6 +141,7 @@ export function GuidedMeasurement({
         {step === 'scan' && (
           <LiveMeasurementCamera
             heightCm={height}
+            voiceService={voiceService}
             multiView={multiView}
             useReference={reference}
             verifyCameraAccess={verifyCameraAccess}

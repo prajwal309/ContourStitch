@@ -28,7 +28,6 @@ import type { Anchor } from '@/lib/live-measurement/multiview/observe';
 import { createObservationClient } from '@/lib/live-measurement/multiview/worker-client';
 import { MeshPreview } from '@/components/reconstruction/MeshPreview';
 import {
-  labels,
   type MeasurementKey,
   type MeasurementReport,
 } from '@/lib/measurement/types';
@@ -49,6 +48,7 @@ import { createScannerVisionEngine } from '@/lib/scanner/vision';
 import type { VisionEngine, VisionFrame } from '@/lib/vision/types';
 import { VoiceControls } from '@/components/voice/VoiceControls';
 import { useVoiceGuidance } from '@/components/voice/useVoiceGuidance';
+import type { VoiceGuidanceService } from '@/lib/voice/voice-guidance';
 
 type Props = {
   heightCm: number;
@@ -57,6 +57,7 @@ type Props = {
   onReview: (report: MeasurementReport) => void;
   engineFactory?: () => Promise<VisionEngine>;
   verifyCameraAccess?: () => Promise<void>;
+  voiceService?: VoiceGuidanceService;
 };
 
 type Facing = 'environment' | 'user';
@@ -84,16 +85,16 @@ function newScan(
 }
 
 const progressiveLabels: Record<DisplayKey, string> = {
-  shoulder: labels.shoulder,
-  arm: labels.arm,
-  chest: labels.chest,
-  waist: labels.waist,
-  hip: labels.hip,
-  inseam: labels.inseam,
-  torso: 'Torso length',
-  neck: labels.neck,
-  sleeve: labels.sleeve,
-  outseam: labels.outseam,
+  shoulder: 'Shoulder Width',
+  arm: 'Arm Length',
+  chest: 'Chest',
+  waist: 'Waist',
+  hip: 'Hip',
+  inseam: 'Inseam',
+  torso: 'Torso Length',
+  neck: 'Neck',
+  sleeve: 'Sleeve Length',
+  outseam: 'Outseam',
 };
 
 const anatomyForMeasurement: Record<DisplayKey, string> = {
@@ -158,10 +159,16 @@ export function LiveMeasurementCamera(props: Props) {
       key={`${facing}-${attempt}`}
       {...props}
       facing={facing}
-      onRetry={() => setAttempt((value) => value + 1)}
-      onSwitch={() =>
-        setFacing((value) => (value === 'environment' ? 'user' : 'environment'))
-      }
+      onRetry={() => {
+        props.voiceService?.cancel(true);
+        setAttempt((value) => value + 1);
+      }}
+      onSwitch={() => {
+        props.voiceService?.cancel(true);
+        setFacing((value) =>
+          value === 'environment' ? 'user' : 'environment',
+        );
+      }}
     />
   );
 }
@@ -176,6 +183,7 @@ function CameraRun({
   onSwitch,
   engineFactory = createScannerVisionEngine,
   verifyCameraAccess,
+  voiceService,
 }: Props & { facing: Facing; onRetry: () => void; onSwitch: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -281,7 +289,14 @@ function CameraRun({
         ? completionMessage
         : snapshot.message
       : undefined;
-  const voiceGuidance = useVoiceGuidance(error ? undefined : spokenInstruction);
+  const voiceGuidance = useVoiceGuidance(
+    error ? undefined : spokenInstruction,
+    {
+      service: voiceService,
+      autoSpeak: !snapshot.complete,
+      suspended: Boolean(error),
+    },
+  );
   const { announceAcquisition } = voiceGuidance;
   const cameraEvidenceCount = snapshot.progressive.filter(
     ({ source }) => source === 'blended' || source === 'camera',
@@ -307,6 +322,7 @@ function CameraRun({
     Math.abs(armSides.left - armSides.right) >= c.asymmetryNoticeCm;
   const lastAcquisitionPercent = useRef(0);
   const acceptedKeys = useRef(new Set<MeasurementKey>());
+  const announcedComplete = useRef(false);
   const complete = snapshot.complete;
   useEffect(() => {
     if (phase !== 'poses' || error) return;
@@ -315,7 +331,9 @@ function CameraRun({
       : [];
     const newlyAcquired = keys.filter((key) => !acceptedKeys.current.has(key));
     acceptedKeys.current = new Set(keys);
-    if (!newlyAcquired.length) return;
+    const justCompleted = complete && !announcedComplete.current;
+    announcedComplete.current = complete;
+    if (!newlyAcquired.length && !justCompleted) return;
 
     const milestones = reachedAcquisitionMilestones(
       lastAcquisitionPercent.current,
@@ -330,9 +348,11 @@ function CameraRun({
       newlyAcquired,
       percent: acquisition.percent,
       milestones,
-      complete,
+      complete: justCompleted,
     });
-    announceAcquisition(`Measurement acquired. ${announcement}`);
+    announceAcquisition(
+      justCompleted ? announcement : `Measurement acquired. ${announcement}`,
+    );
   }, [
     acquisition.percent,
     acquisitionSignature,

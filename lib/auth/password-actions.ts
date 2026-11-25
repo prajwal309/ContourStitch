@@ -13,7 +13,7 @@ import { accountSignInEnabled, currentUser } from './auth';
 import { database } from './db';
 import { oauthIntentCookie } from './oauth-intent';
 import { hashPassword, parseUsername, verifyPassword } from './password';
-import { passwordLengthMessage, validPassword } from './password-policy';
+import { passwordValidationMessage, validPassword } from './password-policy';
 import { passwordScreeningError } from './password-screening';
 import { accountFailure, configurationFeedback } from './access-errors';
 import { allowPasswordAttempt } from './password-limits';
@@ -49,7 +49,9 @@ export async function submitPassword(
         }
       : invalidCredentials;
   if (!validPassword(password))
-    return register ? { error: passwordLengthMessage } : invalidCredentials;
+    return register
+      ? { error: passwordValidationMessage(password) }
+      : invalidCredentials;
   if (register && form.get('confirm-password') !== password) {
     return { error: 'The passwords do not match.' };
   }

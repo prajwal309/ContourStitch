@@ -5,7 +5,7 @@ import { accountSignInEnabled, currentUser } from './auth';
 import { accountFailure, configurationFeedback } from './access-errors';
 import { database } from './db';
 import { hashPassword, parseUsername, verifyPassword } from './password';
-import { passwordLengthMessage, validPassword } from './password-policy';
+import { passwordValidationMessage, validPassword } from './password-policy';
 import { allowPasswordAttempt } from './password-limits';
 import { passwordScreeningError } from './password-screening';
 import { newRecoveryCode, recoveryCodeHash } from './recovery-code';
@@ -72,7 +72,8 @@ export async function recoverPassword(
   const codeHash = recoveryCodeHash(form.get('recovery-code'));
   const password = form.get('password');
   if (!username || !codeHash) return invalidRecovery;
-  if (!validPassword(password)) return { error: passwordLengthMessage };
+  if (!validPassword(password))
+    return { error: passwordValidationMessage(password) };
   if (password !== form.get('confirm-password'))
     return { error: 'The passwords do not match.' };
 

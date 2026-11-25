@@ -69,9 +69,14 @@ function makeEnvironment({
   const spoken: SpeechSynthesisUtterance[] = [];
   const audioSources: string[] = [];
   const paused: string[] = [];
+  const voiceChangeListeners = new Set<() => void>();
   const playConfirmationChime = vi.fn();
   const environment: VoiceGuidanceEnvironment = {
     getVoices: () => voices,
+    listenForVoicesChanged: (listener) => {
+      voiceChangeListeners.add(listener);
+      return () => voiceChangeListeners.delete(listener);
+    },
     speak: (utterance) => spoken.push(utterance),
     cancel: vi.fn(),
     createUtterance: (text) => new FakeUtterance(text),
@@ -85,7 +90,17 @@ function makeEnvironment({
     playConfirmationChime,
     browserLanguage: () => language,
   };
-  return { environment, spoken, audioSources, paused, playConfirmationChime };
+  return {
+    environment,
+    spoken,
+    audioSources,
+    paused,
+    playConfirmationChime,
+    notifyVoicesChanged: () => {
+      for (const listener of voiceChangeListeners) listener();
+    },
+    voiceChangeListeners,
+  };
 }
 
 function GuidancePanel({ instruction }: { instruction: string }) {
@@ -174,6 +189,23 @@ describe('English voice selection', () => {
 });
 
 describe('VoiceGuidanceService', () => {
+  it('refreshes its voice list when browsers load voices asynchronously', () => {
+    const voices: SpeechSynthesisVoice[] = [];
+    const { environment, spoken, notifyVoicesChanged, voiceChangeListeners } =
+      makeEnvironment({ voices });
+    const service = new VoiceGuidanceService(environment);
+
+    service.initialize();
+    voices.push(makeVoice('Late English', 'en-US', true));
+    notifyVoicesChanged();
+    service.speak('Hold still.');
+
+    expect(voiceChangeListeners.size).toBe(1);
+    expect(spoken[0].voice).toBe(voices[0]);
+    service.dispose();
+    expect(voiceChangeListeners.size).toBe(0);
+  });
+
   it('uses the bundled audio prompt when no English browser voice is available', () => {
     const { environment, audioSources, spoken } = makeEnvironment({
       voices: [makeVoice('French', 'fr-FR', true)],
@@ -264,10 +296,10 @@ describe('VoiceControls', () => {
     render(<GuidancePanel instruction="" />);
 
     expect(
-      screen.getByRole('button', { name: 'Disable voice guidance' }),
+      screen.getByRole('button', { name: 'Mute voice guidance' }),
     ).toBeVisible();
     expect(
-      screen.getByText(/On-screen instructions remain available/),
+      screen.getByText(/On-screen guidance remains available/),
     ).toBeVisible();
     expect(screen.queryByLabelText('English voice')).not.toBeInTheDocument();
   });
@@ -281,7 +313,7 @@ describe('VoiceControls', () => {
     });
     vi.stubGlobal('speechSynthesis', synthesis);
     vi.stubGlobal('SpeechSynthesisUtterance', FakeUtterance);
-    render(<GuidancePanel instruction="Hold still." />);
+    render(<GuidancePanel instruction="" />);
     expect(screen.queryByLabelText('English voice')).not.toBeInTheDocument();
 
     const french = makeVoice('French', 'fr-FR', true);
@@ -289,15 +321,21 @@ describe('VoiceControls', () => {
     const secondEnglish = makeVoice('Second English', 'en-US', true);
     available = [french, firstEnglish, secondEnglish];
 
-    fireEvent.click(screen.getByRole('button', { name: 'Replay instruction' }));
+    act(() => {
+      synthesis.dispatchEvent(new Event('voiceschanged'));
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Test voice' }));
     await waitFor(() =>
       expect(synthesis.speak).toHaveBeenLastCalledWith(
-        expect.objectContaining({ voice: firstEnglish }),
+        expect.objectContaining({
+          text: 'Voice guidance is working.',
+          voice: firstEnglish,
+        }),
       ),
     );
   });
 
-  it('starts enabled, uses the first available voice, and remains toggleable', () => {
+  it('starts enabled and offers mute, repeat, test, and volume controls', () => {
     const firstEnglish = makeVoice('First English', 'en-GB', false);
     const secondEnglish = makeVoice('Second English', 'en-US', true);
     const synthesis = Object.assign(new EventTarget(), {
@@ -309,7 +347,7 @@ describe('VoiceControls', () => {
     vi.stubGlobal('SpeechSynthesisUtterance', FakeUtterance);
     render(<GuidancePanel instruction="Hold still." />);
     expect(
-      screen.getByRole('button', { name: 'Disable voice guidance' }),
+      screen.getByRole('button', { name: 'Mute voice guidance' }),
     ).toBeVisible();
     expect(synthesis.speak).toHaveBeenCalledTimes(1);
     expect(synthesis.speak).toHaveBeenLastCalledWith(
@@ -320,21 +358,37 @@ describe('VoiceControls', () => {
       target: { value: '0.35' },
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Replay instruction' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Repeat' }));
     expect(synthesis.speak).toHaveBeenCalledTimes(2);
     expect(synthesis.speak).toHaveBeenLastCalledWith(
       expect.objectContaining({ voice: firstEnglish, volume: 0.35 }),
     );
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Disable voice guidance' }),
+    fireEvent.click(screen.getByRole('button', { name: 'Test voice' }));
+    expect(synthesis.speak).toHaveBeenCalledTimes(3);
+    expect(synthesis.speak).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: 'Voice guidance is working.' }),
     );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Mute voice guidance' }),
+    );
+    const unmute = screen.getByRole('button', {
+      name: 'Unmute voice guidance',
+    });
+    expect(unmute).toBeVisible();
+    fireEvent.click(unmute);
     expect(
-      screen.getByRole('button', { name: 'Enable voice guidance' }),
+      screen.getByRole('button', { name: 'Mute voice guidance' }),
     ).toBeVisible();
+    expect(synthesis.speak).toHaveBeenCalledTimes(4);
+    expect(synthesis.speak).toHaveBeenLastCalledWith(
+      expect.objectContaining({ text: 'Hold still.' }),
+    );
   });
 
-  it('cancels the previous prompt when the measurement stage changes', () => {
+  it('cancels an outdated prompt and waits for the instruction cooldown', () => {
+    vi.useFakeTimers();
     const voice = makeVoice('Local English', 'en-US', true);
     const synthesis = Object.assign(new EventTarget(), {
       getVoices: () => [voice],
@@ -347,12 +401,16 @@ describe('VoiceControls', () => {
     view.rerender(<GuidancePanel instruction="Turn to your left." />);
 
     expect(synthesis.cancel).toHaveBeenCalled();
+    expect(synthesis.speak).toHaveBeenCalledTimes(1);
+    act(() => {
+      vi.advanceTimersByTime(voiceGuidanceConfig.instructionCooldownMs);
+    });
     expect(synthesis.speak).toHaveBeenLastCalledWith(
       expect.objectContaining({ text: 'Turn to your left.' }),
     );
   });
 
-  it('cools down repeated corrections while speaking a changed instruction immediately', () => {
+  it('rate-limits routine corrections and coalesces rapid position changes', () => {
     vi.useFakeTimers();
     const voice = makeVoice('Local English', 'en-US', true);
     const synthesis = Object.assign(new EventTarget(), {
@@ -368,19 +426,16 @@ describe('VoiceControls', () => {
     );
     expect(synthesis.speak).toHaveBeenCalledTimes(1);
     view.rerender(<GuidancePanel instruction="Turn slightly to your left." />);
-    expect(synthesis.speak).toHaveBeenCalledTimes(2);
     view.rerender(<GuidancePanel instruction="Take a step back." />);
-    expect(synthesis.speak).toHaveBeenCalledTimes(3);
-    view.rerender(<GuidancePanel instruction="Stand facing the camera." />);
-    expect(synthesis.speak).toHaveBeenCalledTimes(3);
+    expect(synthesis.speak).toHaveBeenCalledTimes(1);
 
     act(() => {
       vi.advanceTimersByTime(voiceGuidanceConfig.instructionCooldownMs);
     });
 
-    expect(synthesis.speak).toHaveBeenCalledTimes(4);
+    expect(synthesis.speak).toHaveBeenCalledTimes(2);
     expect(synthesis.speak).toHaveBeenLastCalledWith(
-      expect.objectContaining({ text: 'Stand facing the camera.' }),
+      expect.objectContaining({ text: 'Take a step back.' }),
     );
   });
 

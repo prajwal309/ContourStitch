@@ -176,6 +176,7 @@ function playConfirmationTone(volume: number, onError: () => void) {
 
 export type VoiceGuidanceEnvironment = {
   getVoices(): readonly SpeechSynthesisVoice[];
+  listenForVoicesChanged(listener: () => void): () => void;
   speak(utterance: SpeechSynthesisUtterance): void;
   cancel(): void;
   createUtterance(text: string): SpeechSynthesisUtterance | null;
@@ -190,6 +191,22 @@ function getSynthesis() {
 
 const browserEnvironment: VoiceGuidanceEnvironment = {
   getVoices: () => getSynthesis()?.getVoices() ?? [],
+  listenForVoicesChanged: (listener) => {
+    const synthesis = getSynthesis();
+    if (!synthesis) return () => {};
+    if (typeof synthesis.addEventListener === 'function') {
+      synthesis.addEventListener('voiceschanged', listener);
+      return () => synthesis.removeEventListener('voiceschanged', listener);
+    }
+
+    const previousHandler = synthesis.onvoiceschanged;
+    const handler = () => listener();
+    synthesis.onvoiceschanged = handler;
+    return () => {
+      if (synthesis.onvoiceschanged === handler)
+        synthesis.onvoiceschanged = previousHandler;
+    };
+  },
   speak: (utterance) => {
     const synthesis = getSynthesis();
     if (!synthesis) throw new Error('Speech synthesis is unavailable.');
@@ -240,17 +257,55 @@ export class VoiceGuidanceService {
   private generation = 0;
   private activeAudio: AudioPlayer | null = null;
   private lastInstruction = '';
+  private lastInstructionAt = 0;
+  private availableVoices: readonly SpeechSynthesisVoice[] = [];
+  private removeVoicesListener: (() => void) | null = null;
+  private currentStatus = '';
+  private readonly statusListeners = new Set<(message: string) => void>();
 
   constructor(
     private readonly environment: VoiceGuidanceEnvironment = browserEnvironment,
   ) {}
+
+  initialize() {
+    if (this.removeVoicesListener) return;
+    this.availableVoices = this.environment.getVoices();
+    this.removeVoicesListener = this.environment.listenForVoicesChanged(() => {
+      this.availableVoices = this.environment.getVoices();
+    });
+  }
+
+  dispose() {
+    this.cancel(true);
+    this.removeVoicesListener?.();
+    this.removeVoicesListener = null;
+    this.availableVoices = [];
+  }
+
+  getLastInstruction() {
+    return this.lastInstruction;
+  }
+
+  getLastInstructionAt() {
+    return this.lastInstructionAt;
+  }
+
+  subscribeStatus(listener: (message: string) => void) {
+    this.statusListeners.add(listener);
+    listener(this.currentStatus);
+    return () => this.statusListeners.delete(listener);
+  }
 
   cancel(resetInstruction = false) {
     this.generation += 1;
     this.environment.cancel();
     this.activeAudio?.pause();
     this.activeAudio = null;
-    if (resetInstruction) this.lastInstruction = '';
+    if (this.currentStatus) this.reportStatus('');
+    if (resetInstruction) {
+      this.lastInstruction = '';
+      this.lastInstructionAt = 0;
+    }
   }
 
   speak(text: string, options: SpeakOptions = {}) {
@@ -258,12 +313,15 @@ export class VoiceGuidanceService {
     if (!instruction) return;
     if (!options.repeat && instruction === this.lastInstruction) return;
 
+    this.initialize();
     this.cancel();
     const generation = this.generation;
     this.lastInstruction = instruction;
+    this.lastInstructionAt = Date.now();
     const volume = Math.max(0, Math.min(1, options.volume ?? 1));
-    const report = options.onStatus ?? (() => {});
-    const voice = selectEnglishVoice(this.environment.getVoices());
+    const report = (message: string) =>
+      this.reportStatus(message, options.onStatus);
+    const voice = selectEnglishVoice(this.currentVoices());
 
     if (voice) {
       this.speakWithVoice(
@@ -292,9 +350,9 @@ export class VoiceGuidanceService {
     attempted: Set<string>,
   ) {
     const next = selectEnglishVoice(
-      this.environment
-        .getVoices()
-        .filter((voice) => !attempted.has(voiceIdentity(voice))),
+      this.currentVoices().filter(
+        (voice) => !attempted.has(voiceIdentity(voice)),
+      ),
     );
     if (next) {
       attempted.add(voiceIdentity(next));
@@ -306,6 +364,18 @@ export class VoiceGuidanceService {
 
   private isCurrent(generation: number) {
     return generation === this.generation;
+  }
+
+  private currentVoices() {
+    const voices = this.environment.getVoices();
+    this.availableVoices = voices;
+    return this.availableVoices;
+  }
+
+  private reportStatus(message: string, onStatus?: (message: string) => void) {
+    this.currentStatus = message;
+    onStatus?.(message);
+    for (const listener of this.statusListeners) listener(message);
   }
 
   private speakWithVoice(
@@ -404,7 +474,7 @@ export class VoiceGuidanceService {
     report: (message: string) => void,
   ) {
     if (!this.isCurrent(generation)) return;
-    const voices = this.environment.getVoices();
+    const voices = this.currentVoices();
     const defaultVoice = voices.find((voice) => voice.default);
     const language = this.environment.browserLanguage();
     const suitable =

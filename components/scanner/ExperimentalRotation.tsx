@@ -1,6 +1,6 @@
 'use client';
 import { measurementCopy } from '@/lib/measurement/copy';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { HeightForm } from '@/components/measurement/HeightForm';
 import { VideoMeasurementScanner } from '@/components/scanner/VideoMeasurementScanner';
@@ -10,6 +10,7 @@ import {
   type MeasurementAccess,
 } from '@/components/consent/MeasurementConsentForm';
 import type { MeasurementEngineId } from '@/lib/reconstruction/types';
+import { VoiceGuidanceService } from '@/lib/voice/voice-guidance';
 
 const silhouetteViewCounts = [4, 8, 16, 32, 64] as const;
 
@@ -27,8 +28,12 @@ export default function ExperimentalRotation({
   const verifyCameraAccess = useCameraAccessCheck(access.userId);
   const [step, setStep] = useState<'intro' | 'height' | 'scan'>('intro');
   const [height, setHeight] = useState(170);
+  const [voiceService] = useState(() => new VoiceGuidanceService());
   const [engine, setEngine] = useState<MeasurementEngineId>('baseline');
   const [viewCount, setViewCount] = useState<4 | 8 | 16 | 32 | 64>(16);
+
+  useEffect(() => () => voiceService.dispose(), [voiceService]);
+
   return (
     <main id="main" className="flow">
       <section className="flow-card">
@@ -156,6 +161,10 @@ export default function ExperimentalRotation({
             <HeightForm
               continueLabel="Continue to video scan →"
               onContinue={(cm) => {
+                voiceService.initialize();
+                voiceService.speak('Stand facing the camera.', {
+                  repeat: true,
+                });
                 setHeight(cm);
                 setStep('scan');
               }}
@@ -170,6 +179,7 @@ export default function ExperimentalRotation({
         ) : (
           <VideoMeasurementScanner
             heightCm={height}
+            voiceService={voiceService}
             verifyCameraAccess={verifyCameraAccess}
             engine={engine === 'visual-hull' ? 'visual-hull' : 'baseline'}
             silhouetteViewCount={viewCount}

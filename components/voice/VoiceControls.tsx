@@ -14,10 +14,12 @@ export function VoiceControls({
           type="button"
           className="secondary-button"
           onClick={guidance.enabled ? guidance.disable : guidance.enable}
+          aria-label={
+            guidance.enabled ? 'Mute voice guidance' : 'Unmute voice guidance'
+          }
+          aria-pressed={!guidance.enabled}
         >
-          {guidance.enabled
-            ? 'Disable voice guidance'
-            : 'Enable voice guidance'}
+          {guidance.enabled ? 'Mute' : 'Unmute'}
         </button>
         <button
           type="button"
@@ -25,7 +27,15 @@ export function VoiceControls({
           onClick={guidance.replay}
           disabled={!guidance.enabled || !guidance.currentInstruction}
         >
-          Replay instruction
+          Repeat
+        </button>
+        <button
+          type="button"
+          className="text-button"
+          onClick={guidance.testVoice}
+          disabled={!guidance.enabled}
+        >
+          Test voice
         </button>
       </div>
       <div className="voice-guidance-settings">
@@ -47,8 +57,7 @@ export function VoiceControls({
         </p>
       )}
       <p className="voice-guidance-note">
-        Uses the first available English voice automatically. On-screen
-        instructions remain available if speech cannot play.
+        On-screen guidance remains available.
       </p>
     </section>
   );

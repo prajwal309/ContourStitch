@@ -16,26 +16,40 @@ export type VoiceGuidanceControls = {
   enable: () => void;
   disable: () => void;
   replay: () => void;
+  testVoice: () => void;
   announce: (text: string, priority?: boolean) => void;
   announceAcquisition: (text: string) => void;
 };
 
-export function useVoiceGuidance(currentInstruction?: string) {
+export type VoiceGuidanceOptions = {
+  service?: VoiceGuidanceService;
+  autoSpeak?: boolean;
+  suspended?: boolean;
+};
+
+export function useVoiceGuidance(
+  currentInstruction?: string,
+  options: VoiceGuidanceOptions = {},
+) {
   const [volume, setVolume] = useState(0.9);
   const [enabled, setEnabled] = useState(true);
   const [status, setStatus] = useState('');
-  const [service] = useState(() => new VoiceGuidanceService());
+  const [service] = useState(
+    () => options.service ?? new VoiceGuidanceService(),
+  );
+  const ownsService = !options.service;
   const settingsRef = useRef({ volume });
   const currentInstructionRef = useRef(currentInstruction);
   const enabledRef = useRef(enabled);
   const lastSpeechRef = useRef({
-    text: '',
-    timestamp: 0,
+    text: service.getLastInstruction(),
+    timestamp: service.getLastInstructionAt(),
     priority: false,
   });
   const pendingInstructionRef = useRef<string | null>(null);
   const pendingTimerRef = useRef<number | null>(null);
-  const routineSpeechTimesRef = useRef(new Map<string, number>());
+  const autoSpeak = options.autoSpeak ?? true;
+  const suspended = options.suspended ?? false;
 
   useEffect(() => {
     settingsRef.current = { volume };
@@ -61,11 +75,9 @@ export function useVoiceGuidance(currentInstruction?: string) {
         timestamp: Date.now(),
         priority,
       };
-      if (!priority) routineSpeechTimesRef.current.set(instruction, Date.now());
       service.speak(instruction, {
         volume: settingsRef.current.volume,
         repeat: repeat || priority,
-        onStatus: setStatus,
       });
     },
     [clearPending, service],
@@ -78,22 +90,12 @@ export function useVoiceGuidance(currentInstruction?: string) {
       const last = lastSpeechRef.current;
       const instruction = text.trim();
       const now = Date.now();
-      const previousSamePrompt = routineSpeechTimesRef.current.get(instruction);
-      const repeatedPromptWait =
-        previousSamePrompt === undefined
-          ? 0
-          : Math.max(
-              0,
-              voiceGuidanceConfig.instructionCooldownMs -
-                (now - previousSamePrompt),
-            );
-      const priorityWait =
+      if (last.text === instruction) return;
+      const remaining =
         last.text &&
-        last.priority &&
         now - last.timestamp < voiceGuidanceConfig.instructionCooldownMs
           ? voiceGuidanceConfig.instructionCooldownMs - (now - last.timestamp)
           : 0;
-      const remaining = Math.max(repeatedPromptWait, priorityWait);
       if (!remaining) {
         playNow(instruction);
         return;
@@ -111,9 +113,13 @@ export function useVoiceGuidance(currentInstruction?: string) {
   );
 
   useEffect(() => {
-    if (!enabled || !currentInstruction) {
+    if (!enabled || suspended) {
       clearPending();
       service.cancel();
+      return;
+    }
+    if (!autoSpeak || !currentInstruction) {
+      clearPending();
       return;
     }
     queueInstruction(currentInstruction);
@@ -126,26 +132,37 @@ export function useVoiceGuidance(currentInstruction?: string) {
         Date.now() - last.timestamp < voiceGuidanceConfig.instructionCooldownMs;
       if (!priorityIsRecent) service.cancel(true);
     };
-  }, [enabled, currentInstruction, clearPending, queueInstruction, service]);
+  }, [
+    autoSpeak,
+    enabled,
+    currentInstruction,
+    clearPending,
+    queueInstruction,
+    service,
+    suspended,
+  ]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    service.initialize();
+    const unsubscribe = service.subscribeStatus(setStatus);
+    return () => {
       clearPending();
-      service.cancel(true);
-    },
-    [clearPending, service],
-  );
+      unsubscribe();
+      if (ownsService) service.dispose();
+    };
+  }, [clearPending, ownsService, service]);
 
   const enable = useCallback(() => {
     enabledRef.current = true;
     setEnabled(true);
     setStatus('');
+    service.initialize();
     playNow(
       currentInstructionRef.current ?? offlineVoiceInstructions.welcome.text,
       true,
       true,
     );
-  }, [playNow]);
+  }, [playNow, service]);
 
   const disable = useCallback(() => {
     enabledRef.current = false;
@@ -159,6 +176,12 @@ export function useVoiceGuidance(currentInstruction?: string) {
     if (!enabledRef.current || !currentInstructionRef.current) return;
     playNow(currentInstructionRef.current, true, true);
   }, [playNow]);
+
+  const testVoice = useCallback(() => {
+    if (!enabledRef.current) return;
+    service.initialize();
+    playNow('Voice guidance is working.', true, true);
+  }, [playNow, service]);
 
   const announce = useCallback(
     (text: string, priority = false) => {
@@ -191,6 +214,7 @@ export function useVoiceGuidance(currentInstruction?: string) {
     enable,
     disable,
     replay,
+    testVoice,
     announce,
     announceAcquisition,
   } satisfies VoiceGuidanceControls;

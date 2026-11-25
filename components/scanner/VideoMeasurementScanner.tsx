@@ -20,6 +20,7 @@ import type {
 import { MeshPreview } from '@/components/reconstruction/MeshPreview';
 import { VoiceControls } from '@/components/voice/VoiceControls';
 import { useVoiceGuidance } from '@/components/voice/useVoiceGuidance';
+import type { VoiceGuidanceService } from '@/lib/voice/voice-guidance';
 export function VideoMeasurementScanner({
   heightCm,
   onClose,
@@ -27,6 +28,7 @@ export function VideoMeasurementScanner({
   silhouetteViewCount = 16,
   engineFactory = createScannerVisionEngine,
   verifyCameraAccess,
+  voiceService,
 }: {
   heightCm: number;
   onClose: () => void;
@@ -34,6 +36,7 @@ export function VideoMeasurementScanner({
   silhouetteViewCount?: 4 | 8 | 16 | 32 | 64;
   engineFactory?: () => Promise<VisionEngine>;
   verifyCameraAccess?: () => Promise<void>;
+  voiceService?: VoiceGuidanceService;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [facing, setFacing] = useState<'environment' | 'user'>('environment');
@@ -62,7 +65,10 @@ export function VideoMeasurementScanner({
   const spokenInstruction = snapshot
     ? instructions[snapshot.instruction]
     : undefined;
-  const voiceGuidance = useVoiceGuidance(error ? undefined : spokenInstruction);
+  const voiceGuidance = useVoiceGuidance(
+    error ? undefined : spokenInstruction,
+    { service: voiceService, suspended: Boolean(error) },
+  );
   async function runModel() {
     if (!snapshot?.result) return;
     setModelStatus('Loading development model…');

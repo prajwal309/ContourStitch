@@ -5,7 +5,7 @@ import { useId, useState } from 'react';
 import {
   passwordLengthMessage,
   passwordMaxCodeUnits,
-  validPassword,
+  passwordValidationMessage,
 } from '@/lib/auth/password-policy';
 
 export function PasswordInput({
@@ -41,8 +41,8 @@ export function PasswordInput({
             validateLength
               ? ({ currentTarget }) =>
                   currentTarget.setCustomValidity(
-                    currentTarget.value && !validPassword(currentTarget.value)
-                      ? passwordLengthMessage
+                    currentTarget.value
+                      ? passwordValidationMessage(currentTarget.value)
                       : '',
                   )
               : undefined

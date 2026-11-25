@@ -113,6 +113,26 @@ test('shows all nine estimates in a 3 by 3 desktop dashboard', async ({
 
   const grid = page.locator('.live-estimate-grid');
   await expect(grid.locator(':scope > div')).toHaveCount(9);
+  const shoulder = grid.locator('> div').filter({
+    has: page.getByText('Shoulder Width', { exact: true }),
+  });
+  await expect(shoulder.locator('.live-estimate-name')).toHaveCSS(
+    'font-size',
+    '18px',
+  );
+  await expect(shoulder.locator('.live-measurement-value')).toHaveCSS(
+    'font-size',
+    '32px',
+  );
+  await expect(shoulder.locator('.live-measurement-unit')).toHaveCSS(
+    'font-size',
+    '12px',
+  );
+  await expect(shoulder.locator('.live-precision-track')).toHaveCSS(
+    'height',
+    '11px',
+  );
+  await expect(grid.getByText(/circumference/i)).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0, 0));
   expect(
     await grid.evaluate(
@@ -173,7 +193,7 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
       .evaluate((element) => getComputedStyle(element).overflowY),
   ).toBe('visible');
   const shoulder = grid.locator('> div').filter({
-    has: page.getByText('Shoulder breadth', { exact: true }),
+    has: page.getByText('Shoulder Width', { exact: true }),
   });
   const inseam = grid.locator('> div').filter({
     has: page.getByText('Inseam', { exact: true }),
@@ -193,10 +213,10 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
   await page.getByLabel('Reference length in centimetres').fill('102');
   await page.getByRole('button', { name: 'Use reference scale' }).click();
   const sleeve = grid.locator('> div').filter({
-    has: page.getByText('Sleeve length', { exact: true }),
+    has: page.getByText('Sleeve Length', { exact: true }),
   });
   await expect(
-    page.getByRole('button', { name: 'Disable voice guidance' }),
+    page.getByRole('button', { name: 'Mute voice guidance' }),
   ).toBeVisible();
   await expect(
     shoulder.locator('.live-estimate-accessible-state'),
@@ -220,6 +240,16 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
   await expect(
     page.getByRole('progressbar', { name: 'Camera measurements acquired' }),
   ).toHaveAttribute('aria-valuenow', '7');
+  const spokenInstructions = await page.evaluate(
+    () =>
+      (window as Window & { __spokenInstructions?: string[] })
+        .__spokenInstructions ?? [],
+  );
+  expect(
+    spokenInstructions.filter((message) =>
+      message.includes('All required measurements have been acquired.'),
+    ),
+  ).toHaveLength(1);
   expect(
     await page.evaluate(
       () =>
@@ -264,6 +294,14 @@ test('gives corrective guidance and confirms only accepted camera measurements',
   });
   await page.getByRole('button', { name: /Start guided video/ }).click();
 
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { __spokenInstructions?: string[] })
+          .__spokenInstructions?.[0],
+    ),
+  ).toBe('Stand facing the camera.');
+
   const instruction = page.locator('.scan-instruction');
   await expect(instruction).toHaveText(
     'Turn slightly to your left until you face the camera.',
@@ -278,7 +316,7 @@ test('gives corrective guidance and confirms only accepted camera measurements',
   await expect(inseam.getByRole('progressbar')).toHaveCount(0);
   await expect(inseam.locator('.live-measurement-value')).toHaveCSS(
     'font-size',
-    '16px',
+    '32px',
   );
 
   await page.evaluate(() => {
@@ -301,9 +339,18 @@ test('gives corrective guidance and confirms only accepted camera measurements',
     'aria-valuetext',
     '2 of 7 camera-supported measurements acquired (29 percent)',
   );
+  const activeTile = page.locator('.live-estimate.is-active').first();
+  await expect(activeTile).toBeVisible();
+  const activeFontSize = Number.parseFloat(
+    await activeTile
+      .locator('.live-measurement-value')
+      .evaluate((element) => getComputedStyle(element).fontSize),
+  );
+  expect(activeFontSize).toBeGreaterThanOrEqual(44);
+  expect(activeFontSize).toBeLessThanOrEqual(48);
   const shoulder = page
     .locator('.live-estimate-grid > div')
-    .filter({ has: page.getByText('Shoulder breadth', { exact: true }) });
+    .filter({ has: page.getByText('Shoulder Width', { exact: true }) });
   await expect(shoulder).toHaveClass(/is-acquired/);
   await expect(shoulder.getByRole('progressbar')).toHaveAttribute(
     'aria-valuenow',
@@ -311,7 +358,7 @@ test('gives corrective guidance and confirms only accepted camera measurements',
   );
   await expect(shoulder.locator('.live-measurement-value')).toHaveCSS(
     'font-size',
-    '20px',
+    '32px',
   );
   await expect(shoulder.locator('.live-acquired-check')).toHaveAttribute(
     'aria-label',
@@ -351,9 +398,9 @@ test('reopens a measurement when a later pose widens its camera uncertainty', as
 
   const chest = page
     .locator('.live-estimate')
-    .filter({ has: page.getByText('Chest circumference', { exact: true }) });
+    .filter({ has: page.getByText('Chest', { exact: true }) });
   const progress = chest.getByRole('progressbar', {
-    name: 'Chest circumference precision',
+    name: 'Chest precision',
   });
   await expect(progress).toHaveAttribute('aria-valuenow', '100', {
     timeout: 20_000,
