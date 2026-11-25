@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { fixture } from './fixtures';
 import { analyzeFrame, orientation } from '@/lib/scanner/analysis';
 import { Scanner } from '@/lib/scanner/scanner';
+import { instructions } from '@/lib/scanner/instructions';
 import { extractFeatures, geometryBaseline } from '@/lib/scanner/features';
 import { featureNames } from '@/lib/scanner/types';
 import {
@@ -31,6 +32,15 @@ function frame(angle = 0, timestamp = 0): VisionFrame {
   return f;
 }
 describe('video scanner', () => {
+  it("uses concise directions from the participant's perspective", () => {
+    expect(instructions.START_TURNING).toContain('your right');
+    expect(instructions.RETURN_TO_FRONT).toContain('your right');
+    expect(instructions.MOVE_LEFT).not.toContain('preview');
+    expect(instructions.SCAN_COMPLETE).toBe(
+      'All required views captured. Thank you.',
+    );
+  });
+
   it('classifies front, both sides, back and ambiguous angles', () => {
     expect([0, 90, 180, 270, 45].map(orientation)).toEqual([
       'FRONT',

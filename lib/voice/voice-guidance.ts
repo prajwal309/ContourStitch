@@ -49,6 +49,12 @@ export const offlineVoiceInstructions = {
   },
 } as const;
 
+export const voiceGuidanceConfig = {
+  instructionCooldownMs: 2600,
+  speechRate: 0.96,
+  speechPitch: 1,
+} as const;
+
 export function isEnglishLanguage(language: string) {
   return /^en(?:[-_]|$)/i.test(language.trim());
 }
@@ -58,7 +64,14 @@ export function voiceIdentity(voice: SpeechSynthesisVoice) {
 }
 
 export function selectEnglishVoice(voices: readonly SpeechSynthesisVoice[]) {
-  return voices.find((voice) => isEnglishLanguage(voice.lang)) ?? null;
+  const englishVoices = voices.filter((voice) => isEnglishLanguage(voice.lang));
+  return (
+    englishVoices.find((voice) =>
+      /\b(?:natural|neural|premium|enhanced)\b/i.test(voice.name),
+    ) ??
+    englishVoices[0] ??
+    null
+  );
 }
 
 export function offlineAudioForInstruction(text: string) {
@@ -110,12 +123,64 @@ type AudioPlayer = {
   pause(): void;
 };
 
+let confirmationAudioContext: AudioContext | null = null;
+const audioPlayers = new Map<string, HTMLAudioElement>();
+
+function playConfirmationTone(volume: number, onError: () => void) {
+  if (typeof window === 'undefined') {
+    onError();
+    return;
+  }
+  const compatibleWindow = window as Window & {
+    webkitAudioContext?: typeof AudioContext;
+  };
+  const AudioContextConstructor =
+    window.AudioContext ?? compatibleWindow.webkitAudioContext;
+  if (!AudioContextConstructor) {
+    onError();
+    return;
+  }
+
+  try {
+    confirmationAudioContext ??= new AudioContextConstructor();
+    const context = confirmationAudioContext;
+    const play = () => {
+      try {
+        const now = context.currentTime;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(660, now);
+        oscillator.frequency.exponentialRampToValueAtTime(880, now + 0.14);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(
+          Math.max(0.0001, 0.045 * volume),
+          now + 0.025,
+        );
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(now);
+        oscillator.stop(now + 0.26);
+      } catch {
+        onError();
+      }
+    };
+
+    if (context.state === 'running') play();
+    else void context.resume().then(play, onError);
+  } catch {
+    onError();
+  }
+}
+
 export type VoiceGuidanceEnvironment = {
   getVoices(): readonly SpeechSynthesisVoice[];
   speak(utterance: SpeechSynthesisUtterance): void;
   cancel(): void;
   createUtterance(text: string): SpeechSynthesisUtterance | null;
   createAudio(src: string): AudioPlayer | null;
+  playConfirmationChime(volume: number, onError: () => void): void;
   browserLanguage(): string;
 };
 
@@ -137,13 +202,19 @@ const browserEnvironment: VoiceGuidanceEnvironment = {
       : new SpeechSynthesisUtterance(text),
   createAudio: (src) => {
     if (typeof Audio === 'undefined') return null;
-    const audio = new Audio(src);
+    let audio = audioPlayers.get(src);
+    if (!audio) {
+      audio = new Audio(src);
+      audio.preload = 'auto';
+      audioPlayers.set(src, audio);
+    }
     return {
       play(volume, onStart, onError, onEnd) {
         audio.volume = volume;
         audio.onplaying = onStart;
         audio.onerror = onError;
         audio.onended = onEnd;
+        audio.currentTime = 0;
         return audio.play();
       },
       pause() {
@@ -152,6 +223,7 @@ const browserEnvironment: VoiceGuidanceEnvironment = {
       },
     };
   },
+  playConfirmationChime: playConfirmationTone,
   browserLanguage: () =>
     typeof navigator === 'undefined' ? '' : navigator.language,
 };
@@ -208,6 +280,10 @@ export class VoiceGuidanceService {
     this.playOfflineThenDefault(instruction, volume, generation, report);
   }
 
+  playConfirmationChime(volume: number, onError: () => void) {
+    this.environment.playConfirmationChime(volume, onError);
+  }
+
   private tryNextEnglishVoice(
     text: string,
     volume: number,
@@ -250,6 +326,8 @@ export class VoiceGuidanceService {
     utterance.voice = voice;
     utterance.lang = voice.lang;
     utterance.volume = volume;
+    utterance.rate = voiceGuidanceConfig.speechRate;
+    utterance.pitch = voiceGuidanceConfig.speechPitch;
     utterance.onstart = () => {
       started = true;
       if (this.isCurrent(generation)) report('');
@@ -344,6 +422,8 @@ export class VoiceGuidanceService {
     utterance.voice = null;
     utterance.lang = isEnglishLanguage(language) ? language : 'en-US';
     utterance.volume = volume;
+    utterance.rate = voiceGuidanceConfig.speechRate;
+    utterance.pitch = voiceGuidanceConfig.speechPitch;
     utterance.onstart = () => {
       if (this.isCurrent(generation)) report('');
     };

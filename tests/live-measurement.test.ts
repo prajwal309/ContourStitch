@@ -21,19 +21,83 @@ import {
 import { prepareProfile, restoreProfile } from '@/lib/accounts/profile-data';
 import { measurementProgress } from '@/lib/live-measurement/progress';
 import { progressiveEstimates } from '@/lib/live-measurement/progressive';
+import {
+  acquisitionAnnouncement,
+  acquisitionProgress,
+  reachedAcquisitionMilestones,
+} from '@/lib/live-measurement/feedback';
 import { liveFrame } from './live-fixture';
 
 const calibration = { kind: 'height', heightCm: 175 } as const;
 
 describe('guided video measurements', () => {
+  it('counts unique accepted camera measurements and excludes priors or unsupported keys', () => {
+    expect(
+      acquisitionProgress([
+        { key: 'shoulder' },
+        { key: 'shoulder' },
+        { key: 'inseam' },
+        { key: 'outseam' },
+        { key: 'height' },
+      ]),
+    ).toEqual({ count: 1, total: 7, percent: 14 });
+    expect(acquisitionProgress([])).toEqual({
+      count: 0,
+      total: 7,
+      percent: 0,
+    });
+  });
+
+  it('announces actual progress milestones and grouped acquisitions once', () => {
+    expect(reachedAcquisitionMilestones(0, 29)).toEqual([10, 25]);
+    expect(reachedAcquisitionMilestones(29, 29)).toEqual([]);
+    expect(reachedAcquisitionMilestones(43, 86)).toEqual([50, 75]);
+    expect(
+      acquisitionAnnouncement({
+        view: 'Front',
+        newlyAcquired: ['shoulder', 'sleeve'],
+        percent: 29,
+        milestones: [10, 25],
+        complete: false,
+      }),
+    ).toBe(
+      "Great start! Shoulder breadth and sleeve length measurements have been acquired. You're 29 percent complete.",
+    );
+    expect(
+      acquisitionAnnouncement({
+        view: 'Neck',
+        newlyAcquired: ['neck'],
+        percent: 100,
+        milestones: [90, 100],
+        complete: true,
+      }),
+    ).toBe(
+      'Fantastic! All required measurements have been acquired. You are 100 percent complete. Thank you. Your measurements are ready for review.',
+    );
+  });
+
   it('recognizes anatomical left and right in the unmirrored front, side and rear', () => {
     for (const pose of ['front', 'side', 'back'] as const)
       expect(facing(liveFrame(pose))).toBe(pose);
     expect(poseFeedback(liveFrame('front'), 'extended')).toContain(
-      'Extend your arms',
+      'Move your arms out',
     );
     expect(poseFeedback(liveFrame('extended'), 'extended')).toBeNull();
     expect(poseFeedback(liveFrame('neck'), 'neck')).toBeNull();
+  });
+
+  it('gives user-perspective turn corrections and requires the requested side', () => {
+    expect(poseFeedback(liveFrame('front'), 'side')).toBe(
+      'Turn 90 degrees to your right.',
+    );
+    expect(poseFeedback(liveFrame('side'), 'side')).toBeNull();
+
+    const wrongSide = liveFrame('side');
+    wrongSide.landmarks[11].z = -0.18;
+    wrongSide.landmarks[12].z = 0.18;
+    expect(poseFeedback(wrongSide, 'side')).toBe(
+      'Turn back to face the camera, then turn 90 degrees to your right.',
+    );
   });
 
   it('rejects dark, blurred, cropped, multi-person and occluded frames', () => {
@@ -43,7 +107,7 @@ describe('guided video measurements', () => {
     expect(frameFraming({ ...frame, poseCount: 2 }).bounds).toBeNull();
     expect(frameFraming({ ...frame, mask: null }).bounds).toBeNull();
     frame.mask!.data[160] = 1;
-    expect(frameFraming(frame).message).toContain('whole body');
+    expect(frameFraming(frame).message).toContain('head and both feet');
     frame.landmarks[15].visibility = 0.1;
     expect(poseFeedback(frame, 'front')).toContain('arms slightly away');
   });
@@ -121,7 +185,10 @@ describe('guided video measurements', () => {
 
     const blurred = { ...liveFrame('front', 800), sharpness: 0 };
     expect(scan.update(blurred).provisional).toBeNull();
-    expect(scan.skip().report.estimates).toHaveLength(0);
+    const wrongView = scan.update(liveFrame('side', 900));
+    expect(wrongView.index).toBe(0);
+    expect(wrongView.report.estimates).toHaveLength(0);
+    expect(wrongView.message).toContain('face the camera');
   });
 
   it('withholds circumferences when views are absent, jittery or disagree in scale', () => {
@@ -204,11 +271,9 @@ describe('guided video measurements', () => {
       state: 'prior',
       label: 'Prior Estimate',
     });
-    const observing = progressiveEstimates(
-      175,
-      emptyReport,
-      { front: [front] },
-    ).find(({ key }) => key === 'chest')!;
+    const observing = progressiveEstimates(175, emptyReport, {
+      front: [front],
+    }).find(({ key }) => key === 'chest')!;
     expect(
       measurementProgress('chest', observing, {
         completedViews: ['front'],
@@ -218,11 +283,10 @@ describe('guided video measurements', () => {
       }).state,
     ).toBe('observing');
     const cameraReport = { estimates: [chest], missing: {} };
-    const refining = progressiveEstimates(
-      175,
-      cameraReport,
-      { front: [front], side: [side] },
-    ).find(({ key }) => key === 'chest')!;
+    const refining = progressiveEstimates(175, cameraReport, {
+      front: [front],
+      side: [side],
+    }).find(({ key }) => key === 'chest')!;
     expect(
       measurementProgress('chest', refining, {
         pose: 'side',

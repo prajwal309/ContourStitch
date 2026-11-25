@@ -8,31 +8,27 @@ export const poses = [
   {
     id: 'front',
     label: 'Front',
-    instruction:
-      'Stand facing the camera with your arms slightly away from your body.',
+    instruction: 'Stand facing the camera.',
   },
   {
     id: 'extended',
     label: 'Arms extended',
-    instruction: 'Extend your arms to the sides. Keep them straight.',
+    instruction: 'Move your arms out to your sides and keep them straight.',
   },
   {
     id: 'side',
     label: 'Side',
-    instruction:
-      'Turn sideways and keep your arms slightly away from your body.',
+    instruction: 'Turn 90 degrees to your right.',
   },
   {
     id: 'back',
     label: 'Back',
-    instruction: 'Turn around so your back faces the camera.',
-    tip: 'Keep your arms slightly away from your sides.',
+    instruction: 'Turn around to your right so your back faces the camera.',
   },
   {
     id: 'neck',
     label: 'Neck',
-    instruction:
-      'Face the camera, keep your shoulders relaxed, and hold your head upright.',
+    instruction: 'Face the camera. Relax your shoulders and stand straight.',
   },
 ] as const;
 export type Pose = (typeof poses)[number]['id'];
@@ -41,6 +37,13 @@ export type Point = readonly [number, number];
 
 export const leftArm = [11, 13, 15] as const;
 export const rightArm = [12, 14, 16] as const;
+
+function shoulderYaw(frame: VisionFrame) {
+  const [left, right] = [frame.landmarks[11], frame.landmarks[12]];
+  if (!left || !right || (!usable(left) && !usable(right))) return null;
+  if (![left.x, right.x, left.z, right.z].every(Number.isFinite)) return null;
+  return (Math.atan2(right.z - left.z, left.x - right.x) * 180) / Math.PI;
+}
 
 function point(frame: VisionFrame, landmark: Landmark): Point {
   return [landmark.x * frame.width, landmark.y * frame.height];
@@ -56,18 +59,43 @@ function corner(a: Point, b: Point, c: Point) {
 }
 
 export function facing(frame: VisionFrame) {
-  const [left, right] = [frame.landmarks[11], frame.landmarks[12]];
-  if (!left || !right || (!usable(left) && !usable(right))) return 'unknown';
-  if (![left.x, right.x, left.z, right.z].every(Number.isFinite))
-    return 'unknown';
-  // The anatomical left/right shoulder ordering distinguishes front and back in the unmirrored source.
-  const yaw = Math.abs(
-    (Math.atan2(right.z - left.z, left.x - right.x) * 180) / Math.PI,
-  );
+  const angle = shoulderYaw(frame);
+  if (angle === null) return 'unknown';
+  // Use unmirrored source landmarks so a mirrored preview cannot reverse turn directions.
+  const yaw = Math.abs(angle);
   if (yaw <= c.viewToleranceDegrees) return 'front';
   if (yaw >= 180 - c.viewToleranceDegrees) return 'back';
   if (yaw >= c.minSideYaw && yaw <= 180 - c.minSideYaw) return 'side';
   return 'unknown';
+}
+
+function orientationInstruction(frame: VisionFrame, pose: Pose) {
+  const yaw = shoulderYaw(frame);
+  const current = facing(frame);
+
+  if (pose === 'side') {
+    if (yaw === null || Math.abs(yaw) <= c.viewToleranceDegrees)
+      return 'Turn 90 degrees to your right.';
+    if (yaw > 0)
+      return 'Turn back to face the camera, then turn 90 degrees to your right.';
+    if (yaw < -c.minSideYaw)
+      return 'Turn slightly to your left until your side faces the camera.';
+    return 'Turn a little more to your right.';
+  }
+
+  if (pose === 'back') {
+    if (current === 'front')
+      return 'Turn around to your right until your back faces the camera.';
+    if (yaw !== null && yaw < 0)
+      return 'Keep turning to your right until your back faces the camera.';
+    return 'Turn back to face the camera, then turn around to your right.';
+  }
+
+  if (current === 'back') return 'Turn around to face the camera.';
+  if (yaw === null) return 'Face the camera and keep both shoulders visible.';
+  return yaw < 0
+    ? 'Turn slightly to your left until you face the camera.'
+    : 'Turn slightly to your right until you face the camera.';
 }
 
 export function frameFraming(frame: VisionFrame): {
@@ -75,11 +103,14 @@ export function frameFraming(frame: VisionFrame): {
   message: string | null;
 } {
   const retry = (message: string) => ({ bounds: null, message });
-  if (frame.poseCount !== 1) return retry('Keep one person in view.');
+  if (frame.poseCount !== 1)
+    return retry(
+      'Stand in front of the camera. Make sure only you are in view.',
+    );
   if (frame.brightness < imageConfig.minBrightness)
     return retry('Use bright, even light.');
   if (frame.sharpness < imageConfig.minSharpness)
-    return retry('Hold still and check that the camera is in focus.');
+    return retry('Hold still. Check that the camera is in focus.');
   const mask = frame.mask;
   const bounds = maskBounds(mask);
   if (!mask || !bounds || bounds.instability > imageConfig.maxMaskInstability)
@@ -95,15 +126,13 @@ export function frameFraming(frame: VisionFrame): {
     bounds.bottom >= mask.height * (1 - margin) ||
     ![27, 28, 31, 32].some((i) => usable(frame.landmarks[i]))
   ) {
-    return retry(
-      'Move back so your whole body is in view, including your head and feet.',
-    );
+    return retry('Take a step back until your head and both feet are in view.');
   }
   const fraction = bounds.height / mask.height;
   if (fraction < c.minimumBodyFraction)
-    return retry('Move a little closer while keeping your whole body visible.');
+    return retry('Take a step forward while keeping your whole body in view.');
   if (fraction > c.maximumBodyFraction)
-    return retry('Move a little farther from the camera.');
+    return retry('Take a step back while keeping your whole body in view.');
   return { bounds, message: null };
 }
 
@@ -139,7 +168,9 @@ function armPose(
 
 export function poseFeedback(frame: VisionFrame, pose: Pose) {
   const needed = pose === 'extended' || pose === 'neck' ? 'front' : pose;
-  if (facing(frame) !== needed) return 'Turn to match the requested view.';
+  const yaw = shoulderYaw(frame);
+  if (facing(frame) !== needed || (pose === 'side' && yaw !== null && yaw > 0))
+    return orientationInstruction(frame, pose);
   const p = frame.landmarks;
   const core = [
     [p[11], p[23]],
@@ -153,9 +184,13 @@ export function poseFeedback(frame: VisionFrame, pose: Pose) {
       Math.abs(bottom.x - top.x) < c.maximumLean,
   );
   if (pose === 'side' ? !aligned.some(Boolean) : !aligned.every(Boolean))
-    return 'Stand upright with your shoulders over your hips.';
+    return 'Stand straight and keep your shoulders over your hips.';
   if (pose !== 'side' && !armPose(frame, pose))
-    return poses.find(({ id }) => id === pose)!.instruction;
+    return pose === 'extended'
+      ? 'Move your arms out to your sides and keep them straight.'
+      : pose === 'neck'
+        ? 'Relax your shoulders and keep your arms at your sides.'
+        : 'Move your arms slightly away from your body.';
   if (
     pose === 'neck' &&
     (!usable(p[7]) ||
@@ -164,7 +199,7 @@ export function poseFeedback(frame: VisionFrame, pose: Pose) {
       Math.abs(p[7].y - p[8].y) > c.maximumMotion ||
       Math.abs(p[0].x - (p[11].x + p[12].x) / 2) > c.maximumLean)
   )
-    return 'Look straight ahead and keep your head upright.';
+    return 'Look straight ahead. Relax your shoulders and keep your head upright.';
   return null;
 }
 

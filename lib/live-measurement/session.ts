@@ -23,7 +23,6 @@ export class GuidedScan {
   private startedAt: number | null = null;
   private candidates: Sample[] = [];
   private views: Partial<Record<Pose, Sample[]>> = {};
-  private skipped: Pose[] = [];
 
   constructor(
     private calibration: Calibration,
@@ -31,7 +30,7 @@ export class GuidedScan {
     private priorHeightCm = calibration.heightCm,
   ) {}
 
-  snapshot(message = 'Match the pose and hold still.', held = false) {
+  snapshot(message?: string, held = false) {
     const pose = poses[this.index];
     const complete = this.index === poses.length;
     const provisional =
@@ -45,15 +44,12 @@ export class GuidedScan {
     const report = this.estimator.report(this.views, this.calibration);
     const samples = {
       ...this.views,
-      ...(pose && this.candidates.length
-        ? { [pose.id]: this.candidates }
-        : {}),
+      ...(pose && this.candidates.length ? { [pose.id]: this.candidates } : {}),
     };
     return {
       index: this.index,
-      skipped: [...this.skipped],
       complete,
-      message,
+      message: message ?? pose?.instruction ?? 'Scan complete.',
       held,
       provisional,
       report,
@@ -76,13 +72,6 @@ export class GuidedScan {
     this.previous = null;
     this.clearHold();
     return this.snapshot();
-  }
-
-  skip() {
-    const pose = poses[this.index];
-    if (!pose) return this.snapshot();
-    this.skipped.push(pose.id);
-    return this.advance();
   }
 
   update(frame: VisionFrame) {
@@ -120,13 +109,13 @@ export class GuidedScan {
     ) {
       this.clearHold();
       return this.snapshot(
-        'Move your nearer arm forward until your torso outline is clear.',
+        'Move your nearer arm slightly forward so your torso outline is clear.',
       );
     }
     if (pose.id === 'neck' && !evidence.widths.neck) {
       this.clearHold();
       return this.snapshot(
-        'Keep your head upright and clear hair or clothing away from your neckline. You can skip and use a tape.',
+        'Keep your head upright and move hair or clothing clear of your neckline. If needed, enter this measurement with a tape instead.',
       );
     }
 
@@ -140,6 +129,6 @@ export class GuidedScan {
       this.views[pose.id] = this.candidates;
       return this.advance();
     }
-    return this.snapshot('Good position. Hold still.', true);
+    return this.snapshot('Perfect. Hold still.', true);
   }
 }

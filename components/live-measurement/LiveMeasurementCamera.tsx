@@ -18,13 +18,15 @@ import {
 import { GuidedScan } from '@/lib/live-measurement/session';
 import {
   labels,
-  liveMeasurementKeys,
   type MeasurementKey,
   type MeasurementReport,
 } from '@/lib/measurement/types';
 import {
-  measurementProgress,
-} from '@/lib/live-measurement/progress';
+  acquisitionAnnouncement,
+  acquisitionProgress,
+  reachedAcquisitionMilestones,
+} from '@/lib/live-measurement/feedback';
+import { measurementProgress } from '@/lib/live-measurement/progress';
 import {
   progressiveMeasurementKeys,
   type ProgressiveEstimate,
@@ -46,12 +48,7 @@ type Props = {
 type Facing = 'environment' | 'user';
 type Preview = Pick<VisionFrame, 'height' | 'width' | 'landmarks'>;
 type Frozen = { width: number; height: number; bodyPixels: number };
-type LiveMeasurementKey = (typeof liveMeasurementKeys)[number];
 type SmoothedValues = Partial<Record<ProgressiveMeasurementKey, number>>;
-
-function isLiveMeasurementKey(key: MeasurementKey): key is LiveMeasurementKey {
-  return liveMeasurementKeys.some((liveKey) => liveKey === key);
-}
 
 const progressiveLabels: Record<ProgressiveMeasurementKey, string> = {
   shoulder: labels.shoulder,
@@ -82,6 +79,13 @@ function regionForPose(pose?: Pose) {
   }
 }
 
+function wasMeasurementAcquired(
+  key: ProgressiveMeasurementKey,
+  acquired: ReadonlySet<MeasurementKey>,
+) {
+  return key !== 'torso' && acquired.has(key);
+}
+
 function acquisitionMessage({
   phase,
   pose,
@@ -101,11 +105,9 @@ function acquisitionMessage({
   status: string;
   hasPreview: boolean;
 }) {
-  if (error)
-    return 'Camera unavailable';
+  if (error) return 'Camera unavailable';
   if (complete) return 'Scan complete';
-  if (phase === 'reference')
-    return 'Preparing initial estimates';
+  if (phase === 'reference') return 'Preparing initial estimates';
   if (!hasPreview) return status;
   if (!held) return message;
   switch (pose) {
@@ -126,15 +128,7 @@ function acquisitionMessage({
 
 function useSmoothedEstimateValues(estimates: readonly ProgressiveEstimate[]) {
   const [values, setValues] = useState<SmoothedValues>({});
-  const [updated, setUpdated] = useState<SmoothedValues>({});
   const valuesRef = useRef<SmoothedValues>({});
-  const sourcesRef =
-    useRef<Partial<Record<ProgressiveMeasurementKey, ProgressiveEstimate['source']>>>(
-      {},
-    );
-  const highlightTimers = useRef<Partial<Record<ProgressiveMeasurementKey, number>>>(
-    {},
-  );
 
   useEffect(() => {
     if (!estimates.length) return;
@@ -179,36 +173,52 @@ function useSmoothedEstimateValues(estimates: readonly ProgressiveEstimate[]) {
     return () => window.clearInterval(timer);
   }, [estimates]);
 
+  return values;
+}
+
+function useAcquiredMeasurementHighlights(
+  estimates: readonly { key: MeasurementKey }[],
+) {
+  const [highlighted, setHighlighted] = useState<ReadonlySet<MeasurementKey>>(
+    () => new Set(),
+  );
+  const known = useRef(new Set<MeasurementKey>());
+  const timers = useRef(new Map<MeasurementKey, number>());
+
   useEffect(() => {
-    const sources: typeof sourcesRef.current = {};
-    for (const estimate of estimates) {
-      const previous = sourcesRef.current[estimate.key];
-      const includesCamera =
-        estimate.source === 'blended' || estimate.source === 'camera';
-      const previouslyIncludedCamera =
-        previous === 'blended' || previous === 'camera';
-      if (includesCamera && !previouslyIncludedCamera) {
-        setUpdated((current) => ({ ...current, [estimate.key]: true }));
-        window.clearTimeout(highlightTimers.current[estimate.key]);
-        highlightTimers.current[estimate.key] = window.setTimeout(() => {
-          setUpdated((current) => ({ ...current, [estimate.key]: false }));
-        }, 900);
+    const current = new Set(estimates.map(({ key }) => key));
+    const newlyAcquired = [...current].filter((key) => !known.current.has(key));
+    if (newlyAcquired.length) {
+      setHighlighted((previous) => new Set([...previous, ...newlyAcquired]));
+      for (const key of newlyAcquired) {
+        const timer = timers.current.get(key);
+        if (timer !== undefined) window.clearTimeout(timer);
+        timers.current.set(
+          key,
+          window.setTimeout(() => {
+            setHighlighted((previous) => {
+              const next = new Set(previous);
+              next.delete(key);
+              return next;
+            });
+            timers.current.delete(key);
+          }, 900),
+        );
       }
-      sources[estimate.key] = estimate.source;
     }
-    sourcesRef.current = sources;
+  }, [estimates]);
+  useEffect(() => {
+    known.current = new Set(estimates.map(({ key }) => key));
   }, [estimates]);
 
   useEffect(
     () => () => {
-      Object.values(highlightTimers.current).forEach((timer) =>
-        window.clearTimeout(timer),
-      );
+      timers.current.forEach((timer) => window.clearTimeout(timer));
     },
     [],
   );
 
-  return { values, updated };
+  return highlighted;
 }
 
 export function LiveMeasurementCamera(props: Props) {
@@ -262,16 +272,14 @@ function CameraRun({
   const [lower, setLower] = useState(75);
   const [length, setLength] = useState('');
   const [overlay, setOverlay] = useState(true);
-  const spokenEstimates = useRef(new Set<LiveMeasurementKey>());
   const current = poses[snapshot.index];
   const provisional = error ? null : snapshot.provisional;
   const liveReport = provisional ?? snapshot.report;
-  const { values: smoothedValues, updated: updatedMeasurements } =
-    useSmoothedEstimateValues(snapshot.progressive);
-  const completedViews = poses
-    .slice(0, snapshot.index)
-    .filter(({ id }) => !snapshot.skipped.includes(id))
-    .map(({ id }) => id);
+  const smoothedValues = useSmoothedEstimateValues(snapshot.progressive);
+  const acquiredMeasurements = useAcquiredMeasurementHighlights(
+    snapshot.report.estimates,
+  );
+  const completedViews = poses.slice(0, snapshot.index).map(({ id }) => id);
   const captureActive = !error && phase === 'poses' && !snapshot.complete;
   const focusedRegion = snapshot.held ? regionForPose(current?.id) : null;
   const hasPreview = preview !== null;
@@ -285,17 +293,22 @@ function CameraRun({
     status,
     hasPreview,
   });
-  const guidance =
-    current && 'tip' in current
-      ? `${current.instruction} ${current.tip}`
-      : current?.instruction;
-  const spokenInstruction = snapshot.complete
-    ? 'The scan is complete. Review your measurements.'
-    : phase === 'poses'
-      ? guidance
+  const acquisition = acquisitionProgress(snapshot.report.estimates);
+  const allMeasurementsAcquired = acquisition.percent === 100;
+  const completionMessage = allMeasurementsAcquired
+    ? 'All required measurements acquired. Thank you.'
+    : 'Scan complete. Use a tape for any missing measurements.';
+  const guidance = error
+    ? 'Camera unavailable. Retry or enter tape measurements.'
+    : snapshot.message;
+  const spokenInstruction =
+    phase === 'poses' && (hasPreview || snapshot.complete)
+      ? snapshot.complete
+        ? completionMessage
+        : snapshot.message
       : undefined;
   const voiceGuidance = useVoiceGuidance(error ? undefined : spokenInstruction);
-  const { enabled: voiceEnabled, announce } = voiceGuidance;
+  const { announceAcquisition } = voiceGuidance;
   const cameraEvidenceCount = snapshot.progressive.filter(
     ({ source }) => source === 'blended' || source === 'camera',
   ).length;
@@ -312,55 +325,53 @@ function CameraRun({
     (estimate) => estimate.key === 'arm',
   )?.sidesCm;
   const armMismatch =
-    !!armSides && Math.abs(armSides.left - armSides.right) >= c.asymmetryNoticeCm;
-  const completedViewCount = completedViews.length;
-  const completedViewPercent = Math.round(
-    (completedViewCount / poses.length) * 100,
+    !!armSides &&
+    Math.abs(armSides.left - armSides.right) >= c.asymmetryNoticeCm;
+  const lastAcceptedIndex = useRef(snapshot.index);
+  const lastAcquisitionPercent = useRef(acquisition.percent);
+  const acceptedKeys = useRef(
+    new Set(snapshot.report.estimates.map(({ key }) => key)),
   );
-
   useEffect(() => {
+    const currentKeys = new Set(
+      snapshot.report.estimates.map(({ key }) => key),
+    );
+    const previousIndex = lastAcceptedIndex.current;
+    const newlyAcquired = [...currentKeys].filter(
+      (key) => !acceptedKeys.current.has(key),
+    );
     if (
-      !voiceEnabled ||
-      !hasPreview ||
-      error ||
-      phase !== 'poses' ||
-      snapshot.complete ||
-      snapshot.held ||
-      snapshot.message === 'Match the pose and hold still.' ||
-      snapshot.message === guidance
-    )
-      return;
-    const timer = setTimeout(() => announce(snapshot.message), 2400);
-    return () => clearTimeout(timer);
+      phase === 'poses' &&
+      !error &&
+      snapshot.index > previousIndex &&
+      poses[previousIndex]
+    ) {
+      const milestones = reachedAcquisitionMilestones(
+        lastAcquisitionPercent.current,
+        acquisition.percent,
+      );
+      announceAcquisition(
+        acquisitionAnnouncement({
+          view: poses[previousIndex].label,
+          newlyAcquired,
+          percent: acquisition.percent,
+          milestones,
+          complete: snapshot.complete,
+        }),
+      );
+    }
+    lastAcceptedIndex.current = snapshot.index;
+    lastAcquisitionPercent.current = acquisition.percent;
+    acceptedKeys.current = currentKeys;
   }, [
-    voiceEnabled,
-    announce,
-    hasPreview,
+    acquisition.percent,
+    announceAcquisition,
     error,
     phase,
     snapshot.complete,
-    snapshot.held,
-    snapshot.message,
-    guidance,
+    snapshot.index,
+    snapshot.report.estimates,
   ]);
-
-  useEffect(() => {
-    if (!voiceEnabled || error || phase !== 'poses') return;
-    const newlyAvailable = liveReport.estimates.filter(
-      (estimate): estimate is typeof estimate & { key: LiveMeasurementKey } =>
-        isLiveMeasurementKey(estimate.key) &&
-        !spokenEstimates.current.has(estimate.key),
-    );
-    if (!newlyAvailable.length) return;
-    for (const { key } of newlyAvailable) spokenEstimates.current.add(key);
-    const names = newlyAvailable.map(({ key }) => labels[key].toLowerCase());
-    const message =
-      names.length === 1
-        ? `The ${names[0]} estimate is ready to review with a tape.`
-        : `We have estimates for ${names.slice(0, -1).join(', ')} and ${names.at(-1)}. Check each with a tape.`;
-    const timer = setTimeout(() => announce(message), 300);
-    return () => clearTimeout(timer);
-  }, [liveReport.estimates, voiceEnabled, announce, error, phase]);
 
   useEffect(() => {
     const element = video.current;
@@ -566,16 +577,6 @@ function CameraRun({
     begin(calibrated);
   }
 
-  function skipPose() {
-    if (!scan.current) return;
-    const next = scan.current.skip();
-    setSnapshot(next);
-    if (next.complete) {
-      stopCapture.current?.();
-      setPreview(null);
-    }
-  }
-
   function review() {
     stopCapture.current?.();
     onReview(snapshot.report);
@@ -595,23 +596,12 @@ function CameraRun({
                 <li
                   key={id}
                   aria-current={index === snapshot.index ? 'step' : undefined}
-                  className={
-                    index < snapshot.index && !snapshot.skipped.includes(id)
-                      ? 'complete'
-                      : undefined
-                  }
+                  className={index < snapshot.index ? 'complete' : undefined}
                 >
                   <b aria-hidden="true">
-                    {snapshot.skipped.includes(id)
-                      ? '–'
-                      : index < snapshot.index
-                        ? '✓'
-                        : index + 1}
+                    {index < snapshot.index ? '✓' : index + 1}
                   </b>
-                  <span>
-                    {label}
-                    {snapshot.skipped.includes(id) ? ' (skipped)' : ''}
-                  </span>
+                  <span>{label}</span>
                 </li>
               ))}
             </ol>
@@ -651,15 +641,13 @@ function CameraRun({
             />
           )}
         </div>
-        {!snapshot.complete && !error && (
-          <p role="status" className="muted live-feedback">
-            {phase === 'reference'
-              ? status
-              : preview
-                ? snapshot.message
-                : status}
-          </p>
-        )}
+        {!snapshot.complete &&
+          !error &&
+          (phase === 'reference' || !preview) && (
+            <p role="status" className="muted live-feedback">
+              {status}
+            </p>
+          )}
         {error && (
           <p role="alert" className="error">
             {error}
@@ -780,7 +768,7 @@ function CameraRun({
 
         {snapshot.complete ? (
           <div className="review-box">
-            <h2>Scan complete</h2>
+            <h2>{completionMessage}</h2>
             <p>
               The camera is off. Review the estimates, confirm them with a tape,
               and enter any missing measurements.
@@ -809,16 +797,6 @@ function CameraRun({
                   onClick={onRetry}
                 >
                   Try camera again
-                </button>
-              )}
-              {!error && phase === 'poses' && (
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={skipPose}
-                  disabled={!preview}
-                >
-                  Skip this pose
                 </button>
               )}
             </div>
@@ -875,16 +853,16 @@ function CameraRun({
             <div
               className="live-capture-track"
               role="progressbar"
-              aria-label="Accepted pose views captured"
+              aria-label="Camera measurements acquired"
               aria-valuemin={0}
-              aria-valuemax={poses.length}
-              aria-valuenow={completedViewCount}
-              aria-valuetext={`${completedViewCount} of ${poses.length} accepted pose views captured`}
+              aria-valuemax={acquisition.total}
+              aria-valuenow={acquisition.count}
+              aria-valuetext={`${acquisition.count} of ${acquisition.total} camera-supported measurements acquired (${acquisition.percent} percent)`}
             >
-              <span style={{ width: `${completedViewPercent}%` }} />
+              <span style={{ width: `${acquisition.percent}%` }} />
             </div>
             <span>
-              {completedViewCount}/{poses.length} views
+              {acquisition.count}/{acquisition.total} · {acquisition.percent}%
             </span>
           </div>
         </div>
@@ -914,7 +892,9 @@ function CameraRun({
                 ? null
                 : Math.max(1, Math.round(estimate.rangeHalfWidthCm));
             const rangeKind =
-              estimate.source === 'prior' ? 'population variation' : 'working range';
+              estimate.source === 'prior'
+                ? 'population variation'
+                : 'working range';
             const displayValue =
               estimate.valueCm === null
                 ? null
@@ -922,7 +902,7 @@ function CameraRun({
             return (
               <div
                 key={key}
-                className={`live-estimate ${progress.state}${updatedMeasurements[key] ? ' is-updated' : ''}`}
+                className={`live-estimate ${progress.state}${wasMeasurementAcquired(key, acquiredMeasurements) ? ' is-updated' : ''}`}
               >
                 <dt>
                   <span className="live-estimate-name">
@@ -944,8 +924,20 @@ function CameraRun({
                     }
                     role={showSourceMarker ? 'img' : undefined}
                   />
+                  {wasMeasurementAcquired(key, acquiredMeasurements) && (
+                    <span
+                      className="live-acquired-check"
+                      role="img"
+                      aria-label="Camera measurement acquired"
+                      title="Camera measurement acquired"
+                    >
+                      ✓
+                    </span>
+                  )}
                   <span className="live-estimate-accessible-state">
                     {progress.label}. {sourceLabel}
+                    {wasMeasurementAcquired(key, acquiredMeasurements) &&
+                      '. Camera measurement acquired'}
                   </span>
                 </dt>
                 <dd
@@ -977,16 +969,16 @@ function CameraRun({
         </dl>
         <p className="live-estimates-disclosure">
           Experimental estimates only. Ranges are population variation or
-          unvalidated working ranges, not personal accuracy; confirm with a
-          tape before garment production.
+          unvalidated working ranges, not personal accuracy; confirm with a tape
+          before garment production.
         </p>
         <details className="live-estimates-about">
           <summary>About these estimates</summary>
           <div>
             <p>
               Height-based references use equally weighted linear fits from the
-              public ANSUR II men&apos;s and women&apos;s datasets. The source is
-              U.S. military personnel, not a representative consumer or
+              public ANSUR II men&apos;s and women&apos;s datasets. The source
+              is U.S. military personnel, not a representative consumer or
               tailoring population; references are withheld outside 150–190 cm.
             </p>
             <p>
@@ -998,8 +990,8 @@ function CameraRun({
             </p>
             <p>
               Population variation and camera working ranges are not calibrated
-              personal error bounds or confidence probabilities. The
-              measurement engine is experimental and does not guarantee fit.
+              personal error bounds or confidence probabilities. The measurement
+              engine is experimental and does not guarantee fit.
             </p>
             <a
               href="https://www.openlab.psu.edu/datasets/ansur2/"
