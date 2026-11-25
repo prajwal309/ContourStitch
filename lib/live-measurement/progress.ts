@@ -1,16 +1,16 @@
-import { tapeMethod } from '@/lib/measurement/corrections';
-import type { MeasurementEstimate } from '@/lib/measurement/types';
-import { liveMeasurementKeys } from '@/lib/measurement/types';
 import { poses, type Pose } from './guidance';
+import {
+  measurementDependencies,
+  type ProgressiveEstimate,
+  type ProgressiveMeasurementKey,
+} from './progressive';
 
-export type LiveMeasurementKey = (typeof liveMeasurementKeys)[number];
 export type MeasurementProgressState =
-  | 'unavailable'
-  | 'collecting'
-  | 'preliminary'
-  | 'refined'
-  | 'ready'
-  | 'corrected';
+  | 'prior'
+  | 'observing'
+  | 'refining'
+  | 'complete'
+  | 'unavailable';
 
 export type MeasurementProgress = {
   state: MeasurementProgressState;
@@ -18,141 +18,100 @@ export type MeasurementProgress = {
   detail: string;
 };
 
-export const measurementDependencies: Record<
-  LiveMeasurementKey,
-  {
-    requiredViews: readonly Pose[];
-    optionalViews: readonly Pose[];
-    evidence: string;
-  }
-> = {
-  shoulder: {
-    requiredViews: ['front'],
-    optionalViews: [],
-    evidence:
-      'Shoulder-joint landmarks and entered height or a known-size reference for scale.',
-  },
-  arm: {
-    requiredViews: ['extended'],
-    optionalViews: [],
-    evidence:
-      'Both shoulder and wrist landmarks in the arms-extended pose, plus scale calibration.',
-  },
-  chest: {
-    requiredViews: ['front', 'side'],
-    optionalViews: ['back'],
-    evidence:
-      'Stable front width and side depth, matching scales, person segmentation, torso landmarks, and calibration. The back view can corroborate width.',
-  },
-  sleeve: {
-    requiredViews: ['front'],
-    optionalViews: ['back'],
-    evidence:
-      'Shoulder, elbow, and wrist landmarks with scale calibration. The back view can refine the estimate.',
-  },
-  neck: {
-    requiredViews: ['side', 'neck'],
-    optionalViews: [],
-    evidence:
-      'Clear neck silhouettes from the side and relaxed-neck views with consistent scale.',
-  },
-  waist: {
-    requiredViews: ['front', 'side'],
-    optionalViews: ['back'],
-    evidence:
-      'Stable front width and side depth, matching scales, person segmentation, torso landmarks, and calibration. The back view can corroborate width.',
-  },
-  hip: {
-    requiredViews: ['front', 'side'],
-    optionalViews: ['back'],
-    evidence:
-      'Stable front width and side depth, matching scales, person segmentation, torso landmarks, and calibration. The back view can corroborate width.',
-  },
-};
-
 const viewLabel = (view: Pose) =>
   poses.find(({ id }) => id === view)?.label.toLowerCase() ?? view;
 
+const priorConvention: Record<ProgressiveMeasurementKey, string> = {
+  shoulder: 'biacromial breadth',
+  arm: 'shoulder and forearm segment lengths',
+  chest: 'chest circumference',
+  waist: 'waist circumference',
+  hip: 'buttock circumference as a hip proxy',
+  inseam: 'crotch height as an inseam proxy',
+  torso: 'acromial-to-iliocristale vertical distance',
+  neck: 'neck circumference',
+  sleeve: 'arm-length segments as a sleeve-length proxy',
+};
+
 export function measurementProgress(
-  key: LiveMeasurementKey,
+  key: ProgressiveMeasurementKey,
+  estimate: ProgressiveEstimate,
   context: {
-    estimate?: MeasurementEstimate;
-    reviewedEstimate?: MeasurementEstimate;
     pose?: Pose;
     completedViews: readonly Pose[];
     captureActive: boolean;
-    missing?: string;
+    scanComplete: boolean;
   },
 ): MeasurementProgress {
-  const { requiredViews, optionalViews } = measurementDependencies[key];
-  const estimate = context.estimate;
-  const reviewedEstimate = context.reviewedEstimate;
-
-  if (estimate?.method === tapeMethod) {
+  if (context.scanComplete) {
     return {
-      state: 'corrected',
-      label: 'Manually corrected',
+      state: 'complete',
+      label: 'Scan Complete',
       detail:
-        'Your tape entry is shown; the original estimate remains in review history.',
+        estimate.cameraValueCm !== undefined
+          ? 'Camera observations are complete. Confirm this experimental estimate with a tape.'
+          : estimate.priorValueCm !== undefined
+            ? 'No supported camera estimate was available; the height-conditioned prior remains. Confirm it with a tape.'
+            : 'No supported estimate is available. Enter this measurement with a tape.',
     };
   }
 
-  const activeView =
-    context.captureActive &&
-    context.pose &&
-    [...requiredViews, ...optionalViews].includes(context.pose);
-  if (activeView && context.pose) {
-    if (estimate) {
-      return reviewedEstimate
-        ? {
-            state: 'refined',
-            label: 'Refined estimate',
-            detail: 'Updated with additional repeatable view evidence.',
-          }
-        : {
-            state: 'preliminary',
-            label: 'Preliminary estimate',
-            detail:
-              'A supported estimate is forming; it may change with more evidence.',
-          };
-    }
-
-    const stillNeeded = requiredViews.filter(
-      (view) => view !== context.pose && !context.completedViews.includes(view),
-    );
-    return {
-      state: 'collecting',
-      label: 'Collecting data',
-      detail: stillNeeded.length
-        ? `Hold this pose; also needs ${stillNeeded.map(viewLabel).join(' and ')} view${stillNeeded.length > 1 ? 's' : ''}.`
-        : `Hold the ${viewLabel(context.pose)} pose for repeatable samples.`,
-    };
-  }
-
-  if (reviewedEstimate) {
-    return {
-      state: 'ready',
-      label: 'Ready for review',
-      detail: 'Confirm this experimental estimate with a tape.',
-    };
-  }
-
-  const missingViews = requiredViews.filter(
-    (view) => !context.completedViews.includes(view),
-  );
-  if (missingViews.length) {
+  if (estimate.source === 'unavailable') {
     return {
       state: 'unavailable',
-      label: 'Not available',
-      detail: `Needs ${missingViews.map(viewLabel).join(' and ')} view${missingViews.length > 1 ? 's' : ''}.`,
+      label: 'Estimating…',
+      detail:
+        'No height-conditioned prior is available for this height range, and camera evidence is not sufficient yet.',
+    };
+  }
+
+  if (
+    estimate.cameraValueCm !== undefined &&
+    estimate.viewCoverage >= 1
+  ) {
+    return {
+      state: 'refining',
+      label: 'Refining',
+      detail:
+        'Updating the estimate with camera observations as repeatable frames and views arrive.',
+    };
+  }
+
+  if (estimate.cameraValueCm !== undefined) {
+    return {
+        state: 'observing',
+        label: 'Observing',
+        detail: `Camera evidence is available in ${estimate.sampleCount} valid frame${estimate.sampleCount === 1 ? '' : 's'}; collecting the remaining repeatable samples.`,
+    };
+  }
+
+  const { requiredViews, evidence } = measurementDependencies[key];
+  const observed = requiredViews.filter(
+    (view) =>
+      context.completedViews.includes(view) ||
+      (context.captureActive &&
+        context.pose === view &&
+        estimate.sampleCount > 0),
+  );
+  if (observed.length) {
+    const remaining = requiredViews.filter(
+      (view) => !observed.includes(view),
+    );
+    return {
+      state: 'observing',
+      label: 'Observing',
+      detail: remaining.length
+        ? `Camera evidence is building; still needs ${remaining.map(viewLabel).join(' and ')} view${remaining.length > 1 ? 's' : ''}.`
+        : evidence,
     };
   }
 
   return {
-    state: 'unavailable',
-    label: 'Not available',
+    state: 'prior',
+    label: 'Prior Estimate',
     detail:
-      context.missing ??
-      'Required views were collected, but the needed landmarks or silhouette did not pass quality checks.',
+      estimate.source === 'prior'
+        ? `Height-conditioned ${priorConvention[key]} reference only; it is not an observation of your body.`
+        : evidence,
   };
 }

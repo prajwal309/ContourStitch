@@ -13,6 +13,7 @@ import {
   poses,
   type Pose,
 } from './guidance';
+import { progressiveEstimates } from './progressive';
 
 type Prior = { timestamp: number; points: Landmark[] };
 
@@ -27,25 +28,41 @@ export class GuidedScan {
   constructor(
     private calibration: Calibration,
     private estimator: LiveEstimator = silhouetteEstimator,
+    private priorHeightCm = calibration.heightCm,
   ) {}
 
   snapshot(message = 'Match the pose and hold still.', held = false) {
     const pose = poses[this.index];
+    const complete = this.index === poses.length;
     const provisional =
-      pose && this.candidates.length >= c.minimumFrames
+      pose && this.candidates.length > 0
         ? this.estimator.report(
             { ...this.views, [pose.id]: this.candidates },
             this.calibration,
+            { allowPreliminary: true },
           )
         : null;
+    const report = this.estimator.report(this.views, this.calibration);
+    const samples = {
+      ...this.views,
+      ...(pose && this.candidates.length
+        ? { [pose.id]: this.candidates }
+        : {}),
+    };
     return {
       index: this.index,
       skipped: [...this.skipped],
-      complete: this.index === poses.length,
+      complete,
       message,
       held,
       provisional,
-      report: this.estimator.report(this.views, this.calibration),
+      report,
+      progressive: progressiveEstimates(
+        this.priorHeightCm,
+        provisional ?? report,
+        samples,
+        complete,
+      ),
     };
   }
 

@@ -19,11 +19,22 @@ describe('experimental engine selection', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       /commercial model license and PyTorch inference service/,
     );
-    fireEvent.click(
-      screen.getByLabelText(
-        'I consent to camera-based body measurement processing.',
-      ),
+    const cameraConsent = screen.getByLabelText(
+      'I consent to camera-based body measurement processing.',
     );
+    const consent = cameraConsent.closest('.consent-with-agreement');
+    expect(consent).toContainElement(
+      screen.getByRole('link', { name: /Body Measurement Consent/ }),
+    );
+    const accuracyConsent = screen.getByLabelText(
+      'I understand that measurements are estimates and may contain errors.',
+    );
+    expect(accuracyConsent.closest('.consent-with-agreement')).toContainElement(
+      screen.getByRole('link', {
+        name: /Measurement Accuracy Disclaimer/,
+      }),
+    );
+    fireEvent.click(cameraConsent);
     expect(screen.getByRole('button', { name: 'Continue →' })).toBeDisabled();
   });
 

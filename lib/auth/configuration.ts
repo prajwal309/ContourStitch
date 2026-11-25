@@ -96,8 +96,6 @@ export function inspectAuthConfiguration(env: Environment) {
     problems.push(
       'AUTH_URL must be a valid application origin (HTTPS on Vercel)',
     );
-  if ((env.AUTH_SECRET?.trim().length ?? 0) < 32)
-    problems.push('AUTH_SECRET must contain at least 32 characters');
   if (!isPostgresUrl(databaseUrl(env))) {
     const key = configuredDatabaseKey(env, runtimeDatabaseKeys);
     problems.push(
@@ -111,12 +109,11 @@ export function inspectAuthConfiguration(env: Environment) {
       Boolean(env[key]?.trim()),
     ),
   };
-  if (!providers.google && !providers.facebook)
-    problems.push(
-      'Configure AUTH_GOOGLE_ID and AUTH_GOOGLE_SECRET or AUTH_FACEBOOK_ID and AUTH_FACEBOOK_SECRET',
-    );
-
-  return { origin, secure, providers, problems };
+  const oauthEnabled =
+    problems.length === 0 &&
+    (providers.google || providers.facebook) &&
+    (env.AUTH_SECRET?.trim().length ?? 0) >= 32;
+  return { origin, secure, providers, problems, oauthEnabled };
 }
 
 export const authConfiguration = inspectAuthConfiguration(process.env);

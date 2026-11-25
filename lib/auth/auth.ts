@@ -6,14 +6,19 @@ import Google from 'next-auth/providers/google';
 import Facebook from 'next-auth/providers/facebook';
 import { PrismaAdapter } from '@auth/prisma-adapter';
 import {
-  accountAgreements,
-  cameraAgreements,
   matchesVersions,
+  validRegistrationVersions,
 } from '@/lib/consent/agreements';
 import { registrationEvents } from '@/lib/consent/store';
 import { accountReturnPath } from './return-path';
 import { authConfiguration } from './configuration';
 import { database } from './db';
+import {
+  readDatabaseUser,
+  sessionCookie,
+  sessionMaxAge,
+  sessionOptions,
+} from './sessions';
 import { oauthIntentCookie, readOAuthIntent } from './oauth-intent';
 
 declare module 'next-auth' {
@@ -90,19 +95,16 @@ const providers = [
     : []),
 ];
 
-const { origin, secure, problems } = authConfiguration;
-const authConfigured = origin !== null && problems.length === 0;
-if (authConfigured) {
+const { origin, problems, oauthEnabled } = authConfiguration;
+export const accountSignInEnabled = problems.length === 0;
+if (oauthEnabled && origin) {
   // Auth.js reads AUTH_URL for both server actions and callback handlers.
   process.env.AUTH_URL = origin;
-} else if (process.env.VERCEL_ENV === 'production') {
+} else if (!accountSignInEnabled && process.env.VERCEL_ENV === 'production') {
   console.warn('ContourStitch sign-in disabled:', problems.join('. '));
 }
-const sessionCookie = secure
-  ? '__Host-authjs.session-token'
-  : 'authjs.session-token';
 
-export const authentication = authConfigured
+export const authentication = oauthEnabled
   ? NextAuth((request) => {
       const db = database();
       const adapter = PrismaAdapter(db);
@@ -132,12 +134,7 @@ export const authentication = authConfigured
               !intent?.registration ||
               intent.userId ||
               !oauthIdentity ||
-              !matchesVersions(intent.registration, [
-                ...accountAgreements,
-                ...cameraAgreements,
-              ]) ||
-              (intent.registration.IMPROVEMENT !== undefined &&
-                !matchesVersions(intent.registration, ['IMPROVEMENT']))
+              !validRegistrationVersions(intent.registration)
             )
               throw new Error('Account creation is unavailable.');
             // Create the first provider association atomically with the user.
@@ -187,12 +184,12 @@ export const authentication = authConfigured
         cookies: {
           sessionToken: {
             name: sessionCookie,
-            options: { httpOnly: true, sameSite: 'lax', path: '/', secure },
+            options: sessionOptions,
           },
         },
         session: {
           strategy: 'database',
-          maxAge: 30 * 24 * 60 * 60,
+          maxAge: sessionMaxAge,
           updateAge: 24 * 60 * 60,
         },
         pages: { signIn: '/sign-in', error: '/sign-in' },
@@ -219,14 +216,11 @@ export const authentication = authConfigured
               if (!linked) {
                 if (user.email && (await adapter.getUserByEmail?.(user.email)))
                   return '/sign-in?error=OAuthAccountNotLinked';
-                const required = [...accountAgreements, ...cameraAgreements];
                 if (
                   !intent.registration ||
-                  !matchesVersions(intent.registration, required) ||
-                  (intent.registration.IMPROVEMENT !== undefined &&
-                    !matchesVersions(intent.registration, ['IMPROVEMENT']))
+                  !validRegistrationVersions(intent.registration)
                 ) {
-                  return `/sign-in?mode=register&error=RegistrationRequired&next=${encodeURIComponent(accountReturnPath(intent.nextPath))}`;
+                  return `/sign-in?mode=register&method=provider&error=RegistrationRequired&next=${encodeURIComponent(accountReturnPath(intent.nextPath))}`;
                 }
               }
             }
@@ -254,6 +248,8 @@ export const enabledProviders = authentication
 export async function currentUser(): Promise<
   (DefaultSession['user'] & { id: string }) | null
 > {
-  const session = await authentication?.auth();
+  if (!accountSignInEnabled) return null;
+  if (!authentication) return readDatabaseUser();
+  const session = await authentication.auth();
   return session?.user?.id ? session.user : null;
 }

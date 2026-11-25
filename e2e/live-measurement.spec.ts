@@ -1,10 +1,7 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { liveFrame } from '../tests/live-fixture';
 
-test('guides five poses on device, stops the camera, and saves a corrected result', async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 360, height: 800 });
+async function installCameraMock(page: Page) {
   await page.addInitScript({
     content: `
     const frame = (${liveFrame.toString()});
@@ -34,6 +31,83 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
     }});
   `,
   });
+}
+
+test('keeps camera and accuracy agreement links inline on a wide consent page', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto('/measure');
+
+  const agreements = [
+    [
+      'I consent to camera-based body measurement processing.',
+      /^Body Measurement Consent/,
+    ],
+    [
+      'I understand that measurements are estimates and may contain errors.',
+      /^Measurement Accuracy Disclaimer/,
+    ],
+  ] as const;
+
+  for (const [label, linkName] of agreements) {
+    const labelBounds = await page.getByLabel(label).boundingBox();
+    const linkBounds = await page
+      .getByRole('link', { name: linkName })
+      .boundingBox();
+    expect(labelBounds).not.toBeNull();
+    expect(linkBounds).not.toBeNull();
+    expect(Math.abs(linkBounds!.y - labelBounds!.y)).toBeLessThan(3);
+  }
+});
+
+test('shows all nine estimates in a 3 by 3 desktop dashboard', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await installCameraMock(page);
+  await page.goto('/measure');
+  await page
+    .getByRole('checkbox', { name: /I consent to camera-based/ })
+    .check();
+  await page
+    .getByRole('checkbox', { name: /measurements are estimates/ })
+    .check();
+  await page.getByRole('button', { name: /Continue privately/ }).click();
+  await page.getByRole('button', { name: /Start guided video/ }).click();
+
+  const grid = page.locator('.live-estimate-grid');
+  await expect(grid.locator(':scope > div')).toHaveCount(9);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  expect(
+    await grid.evaluate(
+      (element) => getComputedStyle(element).gridTemplateColumns.split(' ').length,
+    ),
+  ).toBe(3);
+  expect(
+    await grid.evaluate((element) => {
+      const { top } = element.getBoundingClientRect();
+      const tileRects = [...element.children].map((tile) =>
+        tile.getBoundingClientRect(),
+      );
+      return (
+        top >= 0 &&
+        tileRects.every((tile) => tile.top >= 0 && tile.bottom <= innerHeight)
+      );
+    }),
+  ).toBe(true);
+  expect(
+    await page.locator('.live-estimates').evaluate(
+      (element) => getComputedStyle(element).overflowY,
+    ),
+  ).toBe('visible');
+});
+
+test('guides five poses on device, stops the camera, and saves a corrected result', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await installCameraMock(page);
   await page.goto('/measure');
   await page
     .getByRole('checkbox', {
@@ -51,18 +125,63 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
     .check();
   await page.getByRole('button', { name: /Start guided video/ }).click();
   await page.getByRole('button', { name: 'Capture reference frame' }).click();
-  await page.getByLabel('Reference length in centimetres').fill('102');
-  await page.getByRole('button', { name: 'Use reference scale' }).click();
-  const sleeve = page.locator('.live-estimates dl > div').filter({
-    has: page.getByText('Sleeve length', { exact: true }),
-  });
-  const shoulder = page.locator('.live-estimates dl > div').filter({
+  const grid = page.locator('.live-estimate-grid');
+  const tiles = grid.locator(':scope > div');
+  await expect(tiles).toHaveCount(9);
+  expect(
+    await grid.evaluate(
+      (element) => getComputedStyle(element).gridTemplateColumns.split(' ').length,
+    ),
+  ).toBe(2);
+  expect(
+    await page.locator('.live-estimates').evaluate(
+      (element) => getComputedStyle(element).overflowY,
+    ),
+  ).toBe('visible');
+  const shoulder = grid.locator('> div').filter({
     has: page.getByText('Shoulder breadth', { exact: true }),
   });
-  await expect(shoulder.getByText('Preliminary estimate')).toBeVisible();
-  await expect(shoulder.getByText('No validated interval')).toBeVisible();
-  await expect(sleeve.getByText('Preliminary estimate')).toBeVisible();
-  await expect(sleeve.getByText(/^\d+ cm$/)).toBeVisible();
+  const inseam = grid.locator('> div').filter({
+    has: page.getByText('Inseam', { exact: true }),
+  });
+  await expect(shoulder.locator('.live-measurement-value')).toHaveText(
+    /^\d+cm$/,
+  );
+  await expect(
+    shoulder.locator('.live-source-indicator'),
+  ).toHaveClass(/is-empty/);
+  await expect(
+    page.getByText(
+      'Height-based population references · camera observations have not started.',
+    ),
+  ).toBeVisible();
+  await expect(inseam.locator('.live-measurement-value')).toHaveText(
+    /^\d+cm$/,
+  );
+  await page.getByLabel('Reference length in centimetres').fill('102');
+  await page.getByRole('button', { name: 'Use reference scale' }).click();
+  const sleeve = grid.locator('> div').filter({
+    has: page.getByText('Sleeve length', { exact: true }),
+  });
+  await expect(
+    page.getByRole('button', { name: 'Disable voice guidance' }),
+  ).toBeVisible();
+  await expect(
+    shoulder.locator('.live-estimate-accessible-state'),
+  ).toContainText('Refining');
+  await expect(
+    shoulder.locator('.live-source-indicator'),
+  ).not.toHaveClass(/is-empty/);
+  await expect(shoulder.locator('.live-uncertainty')).toHaveAttribute(
+    'aria-label',
+    /not a validated personal accuracy range/,
+  );
+  await expect(
+    sleeve.locator('.live-estimate-accessible-state'),
+  ).toContainText('Refining');
+  await expect(sleeve.locator('.live-measurement-value')).toHaveText(
+    /^\d+cm$/,
+  );
   await expect(
     page.getByRole('heading', { name: 'Scan complete' }),
   ).toBeVisible({ timeout: 30_000 });
@@ -135,9 +254,16 @@ test('the real on-device model withholds estimates from a blank camera feed', as
     .check();
   await page.getByRole('button', { name: /Continue privately/ }).click();
   await page.getByRole('button', { name: /Start guided video/ }).click();
-  await expect(page.getByText('Keep one person in view.')).toBeVisible({
-    timeout: 20_000,
-  });
+  await expect(page.locator('p.live-feedback')).toHaveText(
+    'Keep one person in view.',
+    { timeout: 20_000 },
+  );
+  await expect(
+    page.getByText('Height-based population references · no camera evidence yet.'),
+  ).toBeVisible();
+  await expect(
+    page.locator('.live-estimate-grid .live-measurement-value').first(),
+  ).toHaveText(/^\d+cm$/);
   await expect(
     page.getByRole('heading', { name: 'Scan complete' }),
   ).toHaveCount(0);

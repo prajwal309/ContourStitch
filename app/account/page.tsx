@@ -15,14 +15,19 @@ export default async function AccountPage() {
   const user = await currentUser();
   if (!user) redirect(signInFor('/account'));
 
-  const [accounts, consent, acceptedVersions] = await Promise.all([
-    database().account.findMany({
-      where: { userId: user.id },
-      select: { provider: true },
-    }),
-    readConsent(user.id),
-    readAcceptedVersions(user.id),
-  ]);
+  const [accounts, consent, acceptedVersions, passwordLogin] =
+    await Promise.all([
+      database().account.findMany({
+        where: { userId: user.id },
+        select: { provider: true },
+      }),
+      readConsent(user.id),
+      readAcceptedVersions(user.id),
+      database().passwordLogin.findUnique({
+        where: { userId: user.id },
+        select: { username: true },
+      }),
+    ]);
 
   return (
     <main id="main" className="market-page">
@@ -47,6 +52,11 @@ export default async function AccountPage() {
         </section>
         <section className="studio-panel">
           <h2>Sign-in methods</h2>
+          {passwordLogin && (
+            <p>
+              Username: <strong>{passwordLogin.username}</strong>
+            </p>
+          )}
           <div className="account-actions">
             {enabledProviders.map(({ id, name }) =>
               accounts.some(({ provider }) => provider === id) ? (

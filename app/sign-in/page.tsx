@@ -4,11 +4,16 @@ import localFont from 'next/font/local';
 import { redirect } from 'next/navigation';
 import { LockKeyhole } from 'lucide-react';
 import { registerOAuth, startOAuth } from '@/lib/auth/actions';
-import { currentUser, enabledProviders } from '@/lib/auth/auth';
+import {
+  accountSignInEnabled,
+  currentUser,
+  enabledProviders,
+} from '@/lib/auth/auth';
 import { accountReturnPath, agreementReviewPath } from '@/lib/auth/return-path';
 
 import { AgreementFields } from '@/components/consent/AgreementFields';
-import { accountAgreements, cameraAgreements } from '@/lib/consent/agreements';
+import { registrationAgreements } from '@/lib/consent/agreements';
+import { PasswordForm } from '@/components/accounts/PasswordForm';
 
 const googleSans = localFont({
   src: '../fonts/google-sans.woff2',
@@ -44,13 +49,20 @@ export const metadata = { title: 'Sign in | ContourStitch' };
 export default async function SignIn({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string; mode?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    next?: string;
+    mode?: string;
+    method?: string;
+  }>;
 }) {
-  const { error, next, mode } = await searchParams;
+  const { error, next, mode, method } = await searchParams;
   const returnPath = accountReturnPath(next);
   const user = await currentUser();
   if (user && !error) redirect(agreementReviewPath(returnPath));
-  const register = mode === 'register' && !user && enabledProviders.length > 0;
+  const register = mode === 'register' && !user && accountSignInEnabled;
+  const providerRegistration =
+    register && method === 'provider' && enabledProviders.length > 0;
   const nextQuery = `next=${encodeURIComponent(returnPath)}`;
   const providerButtons = enabledProviders.map(({ id, name }) => (
     <button
@@ -91,43 +103,55 @@ export default async function SignIn({
           </Link>
         ) : (
           <div className="sign-in-actions">
-            {register ? (
+            {accountSignInEnabled ? (
               <>
-                <form
-                  action={registerOAuth.bind(null, returnPath)}
-                  className="sign-in-actions"
-                >
-                  <AgreementFields
-                    types={[...cameraAgreements, ...accountAgreements]}
-                    showOptional
+                {providerRegistration ? (
+                  <form
+                    action={registerOAuth.bind(null, returnPath)}
+                    className="agreement-flow"
+                  >
+                    <AgreementFields
+                      types={registrationAgreements}
+                      showOptional
+                    />
+                    {providerButtons}
+                  </form>
+                ) : (
+                  <PasswordForm
+                    key={register ? 'register' : 'sign-in'}
+                    register={register}
+                    next={returnPath}
                   />
-                  {providerButtons}
-                </form>
-                <Link href={`/sign-in?${nextQuery}`} className="text-button">
-                  Already have an account? Sign in
+                )}
+                {!register &&
+                  enabledProviders.map(({ id }, index) => (
+                    <form
+                      action={startOAuth.bind(null, id, null, returnPath)}
+                      key={id}
+                    >
+                      {providerButtons[index]}
+                    </form>
+                  ))}
+                {register && enabledProviders.length > 0 && (
+                  <Link
+                    href={`/sign-in?mode=register&${providerRegistration ? '' : 'method=provider&'}${nextQuery}`}
+                    className="text-button"
+                  >
+                    {providerRegistration
+                      ? 'Create an account with a password'
+                      : 'Create an account with a sign-in provider'}
+                  </Link>
+                )}
+                <Link
+                  href={`/sign-in?${register ? '' : 'mode=register&'}${nextQuery}`}
+                  className="text-button"
+                >
+                  {register
+                    ? 'Already have an account? Sign in'
+                    : 'Create an account'}
                 </Link>
               </>
             ) : (
-              <>
-                {enabledProviders.map(({ id }, index) => (
-                  <form
-                    action={startOAuth.bind(null, id, null, returnPath)}
-                    key={id}
-                  >
-                    {providerButtons[index]}
-                  </form>
-                ))}
-                {enabledProviders.length > 0 && (
-                  <Link
-                    href={`/sign-in?mode=register&${nextQuery}`}
-                    className="text-button"
-                  >
-                    Create an account
-                  </Link>
-                )}
-              </>
-            )}
-            {!enabledProviders.length && (
               <p className="muted">Account sign-in is currently unavailable.</p>
             )}
             <Link className="text-button" href="/measure">

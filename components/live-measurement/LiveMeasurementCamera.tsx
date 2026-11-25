@@ -13,6 +13,7 @@ import {
   facing as frameFacing,
   frameFraming,
   poses,
+  type Pose,
 } from '@/lib/live-measurement/guidance';
 import { GuidedScan } from '@/lib/live-measurement/session';
 import {
@@ -23,10 +24,16 @@ import {
 } from '@/lib/measurement/types';
 import {
   measurementProgress,
-  type LiveMeasurementKey,
 } from '@/lib/live-measurement/progress';
+import {
+  progressiveMeasurementKeys,
+  type ProgressiveEstimate,
+  type ProgressiveMeasurementKey,
+} from '@/lib/live-measurement/progressive';
 import { createScannerVisionEngine } from '@/lib/scanner/vision';
 import type { VisionEngine, VisionFrame } from '@/lib/vision/types';
+import { VoiceControls } from '@/components/voice/VoiceControls';
+import { useVoiceGuidance } from '@/components/voice/useVoiceGuidance';
 
 type Props = {
   heightCm: number;
@@ -39,24 +46,169 @@ type Props = {
 type Facing = 'environment' | 'user';
 type Preview = Pick<VisionFrame, 'height' | 'width' | 'landmarks'>;
 type Frozen = { width: number; height: number; bodyPixels: number };
-
-function speak(text: string, voice: SpeechSynthesisVoice) {
-  window.speechSynthesis.cancel();
-  const request = new SpeechSynthesisUtterance(text);
-  request.voice = voice;
-  request.lang = voice.lang;
-  window.speechSynthesis.speak(request);
-}
-
-function queueSpeech(text: string, voice: SpeechSynthesisVoice) {
-  const request = new SpeechSynthesisUtterance(text);
-  request.voice = voice;
-  request.lang = voice.lang;
-  window.speechSynthesis.speak(request);
-}
+type LiveMeasurementKey = (typeof liveMeasurementKeys)[number];
+type SmoothedValues = Partial<Record<ProgressiveMeasurementKey, number>>;
 
 function isLiveMeasurementKey(key: MeasurementKey): key is LiveMeasurementKey {
   return liveMeasurementKeys.some((liveKey) => liveKey === key);
+}
+
+const progressiveLabels: Record<ProgressiveMeasurementKey, string> = {
+  shoulder: labels.shoulder,
+  arm: labels.arm,
+  chest: labels.chest,
+  waist: labels.waist,
+  hip: labels.hip,
+  inseam: labels.inseam,
+  torso: 'Torso length',
+  neck: labels.neck,
+  sleeve: labels.sleeve,
+};
+
+function regionForPose(pose?: Pose) {
+  switch (pose) {
+    case 'front':
+      return 'upper-body';
+    case 'extended':
+      return 'arms';
+    case 'side':
+      return 'torso';
+    case 'back':
+      return 'torso';
+    case 'neck':
+      return 'neck';
+    default:
+      return null;
+  }
+}
+
+function acquisitionMessage({
+  phase,
+  pose,
+  held,
+  complete,
+  error,
+  message,
+  status,
+  hasPreview,
+}: {
+  phase: 'reference' | 'poses';
+  pose?: Pose;
+  held: boolean;
+  complete: boolean;
+  error: string;
+  message: string;
+  status: string;
+  hasPreview: boolean;
+}) {
+  if (error)
+    return 'Camera unavailable';
+  if (complete) return 'Scan complete';
+  if (phase === 'reference')
+    return 'Preparing initial estimates';
+  if (!hasPreview) return status;
+  if (!held) return message;
+  switch (pose) {
+    case 'front':
+      return 'Detecting body landmarks · front view';
+    case 'extended':
+      return 'Collecting arm landmarks';
+    case 'side':
+      return 'Collecting side view';
+    case 'back':
+      return 'Refining measurements';
+    case 'neck':
+      return 'Refining neck measurement';
+    default:
+      return 'Collecting camera observations';
+  }
+}
+
+function useSmoothedEstimateValues(estimates: readonly ProgressiveEstimate[]) {
+  const [values, setValues] = useState<SmoothedValues>({});
+  const [updated, setUpdated] = useState<SmoothedValues>({});
+  const valuesRef = useRef<SmoothedValues>({});
+  const sourcesRef =
+    useRef<Partial<Record<ProgressiveMeasurementKey, ProgressiveEstimate['source']>>>(
+      {},
+    );
+  const highlightTimers = useRef<Partial<Record<ProgressiveMeasurementKey, number>>>(
+    {},
+  );
+
+  useEffect(() => {
+    if (!estimates.length) return;
+    const targets = new Map(
+      estimates
+        .filter(
+          (estimate): estimate is ProgressiveEstimate & { valueCm: number } =>
+            estimate.valueCm !== null,
+        )
+        .map(({ key, valueCm }) => [key, valueCm] as const),
+    );
+    const update = () => {
+      const current = valuesRef.current;
+      const next = { ...current };
+      let changed = false;
+      let moving = false;
+
+      targets.forEach((target, key) => {
+        const previous = current[key];
+        const value =
+          previous === undefined
+            ? target
+            : previous + (target - previous) * 0.24;
+        const smoothed = Math.abs(target - value) < 0.15 ? target : value;
+
+        if (previous !== smoothed) {
+          next[key] = smoothed;
+          changed = true;
+        }
+        if (Math.abs(target - smoothed) >= 0.15) moving = true;
+      });
+
+      if (changed) {
+        valuesRef.current = next;
+        setValues(next);
+      }
+      if (!moving) window.clearInterval(timer);
+    };
+
+    const timer = window.setInterval(update, 50);
+    update();
+    return () => window.clearInterval(timer);
+  }, [estimates]);
+
+  useEffect(() => {
+    const sources: typeof sourcesRef.current = {};
+    for (const estimate of estimates) {
+      const previous = sourcesRef.current[estimate.key];
+      const includesCamera =
+        estimate.source === 'blended' || estimate.source === 'camera';
+      const previouslyIncludedCamera =
+        previous === 'blended' || previous === 'camera';
+      if (includesCamera && !previouslyIncludedCamera) {
+        setUpdated((current) => ({ ...current, [estimate.key]: true }));
+        window.clearTimeout(highlightTimers.current[estimate.key]);
+        highlightTimers.current[estimate.key] = window.setTimeout(() => {
+          setUpdated((current) => ({ ...current, [estimate.key]: false }));
+        }, 900);
+      }
+      sources[estimate.key] = estimate.source;
+    }
+    sourcesRef.current = sources;
+  }, [estimates]);
+
+  useEffect(
+    () => () => {
+      Object.values(highlightTimers.current).forEach((timer) =>
+        window.clearTimeout(timer),
+      );
+    },
+    [],
+  );
+
+  return { values, updated };
 }
 
 export function LiveMeasurementCamera(props: Props) {
@@ -110,37 +262,65 @@ function CameraRun({
   const [lower, setLower] = useState(75);
   const [length, setLength] = useState('');
   const [overlay, setOverlay] = useState(true);
-  const [voice, setVoice] = useState<SpeechSynthesisVoice | null>(null);
-  const [voiceNotice, setVoiceNotice] = useState('');
   const spokenEstimates = useRef(new Set<LiveMeasurementKey>());
   const current = poses[snapshot.index];
   const provisional = error ? null : snapshot.provisional;
   const liveReport = provisional ?? snapshot.report;
+  const { values: smoothedValues, updated: updatedMeasurements } =
+    useSmoothedEstimateValues(snapshot.progressive);
   const completedViews = poses
     .slice(0, snapshot.index)
     .filter(({ id }) => !snapshot.skipped.includes(id))
     .map(({ id }) => id);
   const captureActive = !error && phase === 'poses' && !snapshot.complete;
+  const focusedRegion = snapshot.held ? regionForPose(current?.id) : null;
+  const hasPreview = preview !== null;
+  const acquisitionText = acquisitionMessage({
+    phase,
+    pose: current?.id,
+    held: snapshot.held,
+    complete: snapshot.complete,
+    error,
+    message: snapshot.message,
+    status,
+    hasPreview,
+  });
   const guidance =
     current && 'tip' in current
       ? `${current.instruction} ${current.tip}`
       : current?.instruction;
-  const hasPreview = preview !== null;
   const spokenInstruction = snapshot.complete
     ? 'The scan is complete. Review your measurements.'
     : phase === 'poses'
       ? guidance
       : undefined;
-
-  useEffect(() => {
-    if (!voice || !spokenInstruction || error) return;
-    speak(spokenInstruction, voice);
-    return () => window.speechSynthesis.cancel();
-  }, [voice, spokenInstruction, error]);
+  const voiceGuidance = useVoiceGuidance(error ? undefined : spokenInstruction);
+  const { enabled: voiceEnabled, announce } = voiceGuidance;
+  const cameraEvidenceCount = snapshot.progressive.filter(
+    ({ source }) => source === 'blended' || source === 'camera',
+  ).length;
+  const sourceSummary = error
+    ? cameraEvidenceCount
+      ? `${cameraEvidenceCount} estimates retain camera evidence; others are references or need data.`
+      : 'Camera unavailable · references shown where supported.'
+    : cameraEvidenceCount
+      ? `${cameraEvidenceCount} of ${progressiveMeasurementKeys.length} estimates include camera evidence; others remain references or need data.`
+      : phase === 'reference'
+        ? 'Height-based population references · camera observations have not started.'
+        : 'Height-based population references · no camera evidence yet.';
+  const armSides = liveReport.estimates.find(
+    (estimate) => estimate.key === 'arm',
+  )?.sidesCm;
+  const armMismatch =
+    !!armSides && Math.abs(armSides.left - armSides.right) >= c.asymmetryNoticeCm;
+  const completedViewCount = completedViews.length;
+  const completedViewPercent = Math.round(
+    (completedViewCount / poses.length) * 100,
+  );
 
   useEffect(() => {
     if (
-      !voice ||
+      !voiceEnabled ||
       !hasPreview ||
       error ||
       phase !== 'poses' ||
@@ -150,10 +330,11 @@ function CameraRun({
       snapshot.message === guidance
     )
       return;
-    const timer = setTimeout(() => speak(snapshot.message, voice), 2400);
+    const timer = setTimeout(() => announce(snapshot.message), 2400);
     return () => clearTimeout(timer);
   }, [
-    voice,
+    voiceEnabled,
+    announce,
     hasPreview,
     error,
     phase,
@@ -164,7 +345,7 @@ function CameraRun({
   ]);
 
   useEffect(() => {
-    if (!voice || error || phase !== 'poses') return;
+    if (!voiceEnabled || error || phase !== 'poses') return;
     const newlyAvailable = liveReport.estimates.filter(
       (estimate): estimate is typeof estimate & { key: LiveMeasurementKey } =>
         isLiveMeasurementKey(estimate.key) &&
@@ -177,9 +358,9 @@ function CameraRun({
       names.length === 1
         ? `The ${names[0]} estimate is ready to review with a tape.`
         : `We have estimates for ${names.slice(0, -1).join(', ')} and ${names.at(-1)}. Check each with a tape.`;
-    const timer = setTimeout(() => queueSpeech(message, voice), 300);
+    const timer = setTimeout(() => announce(message), 300);
     return () => clearTimeout(timer);
-  }, [liveReport.estimates, voice, error, phase]);
+  }, [liveReport.estimates, voiceEnabled, announce, error, phase]);
 
   useEffect(() => {
     const element = video.current;
@@ -324,7 +505,7 @@ function CameraRun({
   }, [engineFactory, facing, heightCm, useReference, verifyCameraAccess]);
 
   function begin(calibration: Calibration) {
-    scan.current = new GuidedScan(calibration);
+    scan.current = new GuidedScan(calibration, undefined, heightCm);
     setSnapshot(scan.current.snapshot());
     setPhase('poses');
     setFrozen(null);
@@ -395,27 +576,6 @@ function CameraRun({
     }
   }
 
-  function enableVoice() {
-    if (voice) {
-      window.speechSynthesis.cancel();
-      setVoice(null);
-      return;
-    }
-    const local = window.speechSynthesis
-      ?.getVoices()
-      .find(
-        (item) => item.localService && item.lang.toLowerCase().startsWith('en'),
-      );
-    if (local && typeof SpeechSynthesisUtterance !== 'undefined') {
-      setVoiceNotice('');
-      if (spokenInstruction) speak(spokenInstruction, local);
-      setVoice(local);
-    } else
-      setVoiceNotice(
-        'A local English voice is unavailable. You can use the on-screen instructions.',
-      );
-  }
-
   function review() {
     stopCapture.current?.();
     onReview(snapshot.report);
@@ -461,7 +621,7 @@ function CameraRun({
           </>
         )}
         <div
-          className="camera-preview live-preview"
+          className={`camera-preview live-preview${snapshot.held ? ' is-scanning' : ''}`}
           hidden={snapshot.complete || !!frozen}
           style={
             ratio
@@ -485,7 +645,10 @@ function CameraRun({
             {!!preview && overlay && <PoseOverlay {...preview} />}
           </div>
           {overlay && (
-            <BodyGuide side={current?.id === 'side' && phase === 'poses'} />
+            <BodyGuide
+              side={current?.id === 'side' && phase === 'poses'}
+              focus={focusedRegion}
+            />
           )}
         </div>
         {!snapshot.complete && !error && (
@@ -668,19 +831,8 @@ function CameraRun({
                 />{' '}
                 Show body overlay
               </label>
-              <button
-                type="button"
-                className="text-button"
-                onClick={enableVoice}
-              >
-                {voice ? 'Mute spoken guidance' : 'Enable spoken guidance'}
-              </button>
             </div>
-            {voiceNotice && (
-              <p role="status" className="muted">
-                {voiceNotice}
-              </p>
-            )}
+            <VoiceControls guidance={voiceGuidance} />
             <button type="button" className="text-button" onClick={review}>
               Enter tape measurements instead
             </button>
@@ -692,72 +844,172 @@ function CameraRun({
         className="live-estimates"
         aria-labelledby="live-estimates-title"
       >
-        <h2 id="live-estimates-title">Live estimates</h2>
-        <p className="muted">
-          Experimental estimates update from repeatable pose evidence. No
-          validated uncertainty intervals are available; model confidence
-          describes capture quality, not physical measurement error. Garment
-          ease is separate.
-        </p>
-        <dl>
-          {liveMeasurementKeys.map((key) => {
-            const estimate = liveReport.estimates.find(
+        <div className="live-estimates-heading">
+          <h2 id="live-estimates-title">Live estimates</h2>
+          <span>
+            {error
+              ? 'Camera off'
+              : snapshot.complete
+                ? 'Complete'
+                : cameraEvidenceCount
+                  ? 'Refining'
+                  : 'Experimental'}
+          </span>
+        </div>
+        <div className="live-acquisition">
+          <div
+            className={`live-acquisition-status${captureActive && snapshot.held ? ' is-scanning' : ''}`}
+          >
+            <span className="live-scan-indicator" aria-hidden="true" />
+            <p role="status" aria-live="polite">
+              {acquisitionText}
+            </p>
+          </div>
+          <p className="live-source-summary">{sourceSummary}</p>
+          {armMismatch && (
+            <p className="live-arm-warning">
+              Arm sides differ; tape-check both.
+            </p>
+          )}
+          <div className="live-capture-progress">
+            <div
+              className="live-capture-track"
+              role="progressbar"
+              aria-label="Accepted pose views captured"
+              aria-valuemin={0}
+              aria-valuemax={poses.length}
+              aria-valuenow={completedViewCount}
+              aria-valuetext={`${completedViewCount} of ${poses.length} accepted pose views captured`}
+            >
+              <span style={{ width: `${completedViewPercent}%` }} />
+            </div>
+            <span>
+              {completedViewCount}/{poses.length} views
+            </span>
+          </div>
+        </div>
+        <dl className="live-estimate-grid">
+          {progressiveMeasurementKeys.map((key) => {
+            const estimate = snapshot.progressive.find(
               (item) => item.key === key,
-            );
-            const reviewedEstimate = snapshot.report.estimates.find(
-              (item) => item.key === key,
-            );
-            const progress = measurementProgress(key, {
-              estimate,
-              reviewedEstimate,
+            )!;
+            const progress = measurementProgress(key, estimate, {
               pose: current?.id,
               completedViews,
               captureActive,
-              missing: liveReport.missing[key],
+              scanComplete: snapshot.complete,
             });
+            const sourceLabel =
+              estimate.source === 'prior'
+                ? 'Height-based population reference'
+                : estimate.source === 'blended'
+                  ? 'Population reference refined with camera evidence'
+                  : estimate.source === 'camera'
+                    ? 'Camera-supported estimate'
+                    : 'No supported estimate yet';
+            const showSourceMarker =
+              estimate.source !== 'prior' || (key === 'arm' && armMismatch);
+            const rangeCm =
+              estimate.rangeHalfWidthCm === null
+                ? null
+                : Math.max(1, Math.round(estimate.rangeHalfWidthCm));
+            const rangeKind =
+              estimate.source === 'prior' ? 'population variation' : 'working range';
+            const displayValue =
+              estimate.valueCm === null
+                ? null
+                : Math.round(smoothedValues[key] ?? estimate.valueCm);
             return (
-              <div key={key} className={`live-estimate ${progress.state}`}>
+              <div
+                key={key}
+                className={`live-estimate ${progress.state}${updatedMeasurements[key] ? ' is-updated' : ''}`}
+              >
                 <dt>
-                  <span>{labels[key]}</span>
-                  <span className="live-estimate-state">{progress.label}</span>
+                  <span className="live-estimate-name">
+                    {progressiveLabels[key]}
+                  </span>
+                  <span
+                    className={`live-source-indicator${showSourceMarker ? ` source-${estimate.source}` : ' is-empty'}${key === 'arm' && armMismatch ? ' is-warning' : ''}`}
+                    title={
+                      key === 'arm' && armMismatch
+                        ? `${sourceLabel}. Verify both arm sides with a tape.`
+                        : sourceLabel
+                    }
+                    aria-label={
+                      showSourceMarker
+                        ? key === 'arm' && armMismatch
+                          ? `${sourceLabel}. Verify both arm sides with a tape.`
+                          : sourceLabel
+                        : undefined
+                    }
+                    role={showSourceMarker ? 'img' : undefined}
+                  />
+                  <span className="live-estimate-accessible-state">
+                    {progress.label}. {sourceLabel}
+                  </span>
                 </dt>
-                <dd className="live-measurement-value">
-                  {estimate ? `${Math.round(estimate.valueCm)} cm` : '—'}
-                </dd>
                 <dd
-                  className="live-uncertainty"
-                  aria-label="No validated uncertainty interval"
+                  className={`live-measurement-value${displayValue === null ? ' is-estimating' : ''}`}
                 >
-                  <span className="uncertainty-indicator" aria-hidden="true" />
-                  No validated interval
+                  {displayValue === null ? (
+                    'Estimating…'
+                  ) : (
+                    <>
+                      <span>{displayValue}</span>
+                      <span className="live-measurement-unit">cm</span>
+                    </>
+                  )}
                 </dd>
-                <dd className="muted live-progress-detail">
-                  {progress.detail}
-                </dd>
-                {estimate && (
-                  <dd className="muted live-confidence">
-                    Model confidence: {estimate.confidence}; this is not a
-                    physical error range.
+                {rangeCm !== null && (
+                  <dd
+                    className="live-uncertainty"
+                    aria-label={`Approximately plus or minus ${rangeCm} centimetres; ${rangeKind}. This is not a validated personal accuracy range.`}
+                  >
+                    <span aria-hidden="true">±{rangeCm} cm</span>
+                    <span className="live-range-kind">
+                      {estimate.source === 'prior' ? 'pop.' : 'working'}
+                    </span>
                   </dd>
-                )}
-                {estimate?.sidesCm && (
-                  <>
-                    <dd className="muted">
-                      Left {Math.round(estimate.sidesCm.left)} cm · Right{' '}
-                      {Math.round(estimate.sidesCm.right)} cm
-                    </dd>
-                    {Math.abs(estimate.sidesCm.left - estimate.sidesCm.right) >=
-                      c.asymmetryNoticeCm && (
-                      <dd className="tape-warning">
-                        Check both arms with a tape.
-                      </dd>
-                    )}
-                  </>
                 )}
               </div>
             );
           })}
         </dl>
+        <p className="live-estimates-disclosure">
+          Experimental estimates only. Ranges are population variation or
+          unvalidated working ranges, not personal accuracy; confirm with a
+          tape before garment production.
+        </p>
+        <details className="live-estimates-about">
+          <summary>About these estimates</summary>
+          <div>
+            <p>
+              Height-based references use equally weighted linear fits from the
+              public ANSUR II men&apos;s and women&apos;s datasets. The source is
+              U.S. military personnel, not a representative consumer or
+              tailoring population; references are withheld outside 150–190 cm.
+            </p>
+            <p>
+              Camera evidence is incorporated only when the current method
+              supports it. In this build, inseam remains a height-based
+              reference. The prior uses buttock circumference as a hip proxy,
+              crotch height as an inseam proxy, and arm segments as a sleeve
+              proxy. Arm-side differences may require separate tape checks.
+            </p>
+            <p>
+              Population variation and camera working ranges are not calibrated
+              personal error bounds or confidence probabilities. The
+              measurement engine is experimental and does not guarantee fit.
+            </p>
+            <a
+              href="https://www.openlab.psu.edu/datasets/ansur2/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              ANSUR II source and methods
+            </a>
+          </div>
+        </details>
       </section>
     </div>
   );

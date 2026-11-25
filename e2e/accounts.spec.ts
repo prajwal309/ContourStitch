@@ -48,6 +48,12 @@ async function checkRegistration(page: Page, optional = false) {
   await expect(
     page.getByRole('heading', { name: 'Create an account' }),
   ).toBeVisible();
+  await page
+    .getByRole('link', { name: 'Create an account with a sign-in provider' })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Continue with Google' }),
+  ).toBeVisible();
   for (const checkbox of await page.getByRole('checkbox').all()) {
     await expect(checkbox).not.toBeChecked();
   }
@@ -129,6 +135,10 @@ test('OAuth linking, private cloud profiles, and expired sessions', async ({
       });
       localStorage.setItem(key, JSON.stringify(profile));
     });
+    await page
+      .getByText('Navigation menu', { exact: true })
+      .locator('..')
+      .click();
     await page.getByRole('link', { name: 'My Fit Profile' }).click();
     await checkRegistration(page);
     await completeOAuth(

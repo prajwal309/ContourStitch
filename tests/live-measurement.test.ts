@@ -20,6 +20,7 @@ import {
 } from '@/lib/measurement/corrections';
 import { prepareProfile, restoreProfile } from '@/lib/accounts/profile-data';
 import { measurementProgress } from '@/lib/live-measurement/progress';
+import { progressiveEstimates } from '@/lib/live-measurement/progressive';
 import { liveFrame } from './live-fixture';
 
 const calibration = { kind: 'height', heightCm: 175 } as const;
@@ -96,10 +97,14 @@ describe('guided video measurements', () => {
       snapshot.provisional?.estimates.find(({ key }) => key === 'sleeve')
         ?.valueCm;
 
-    for (let i = 0; i < 3; i++) {
-      expect(sleeve(scan.update(liveFrame('front', i * 100)))).toBeUndefined();
+    const first = scan.update(liveFrame('front', 0));
+    expect(sleeve(first)).toBeGreaterThan(0);
+    expect(first.provisional?.estimates[0].confidence).toBe('low');
+
+    let initial = first;
+    for (let i = 1; i < 4; i++) {
+      initial = scan.update(liveFrame('front', i * 100));
     }
-    const initial = scan.update(liveFrame('front', 300));
     expect(sleeve(initial)).toBeGreaterThan(0);
     expect(initial.report.estimates).toHaveLength(0);
 
@@ -131,8 +136,19 @@ describe('guided video measurements', () => {
     };
     const front = Array.from({ length: 5 }, () => collect('front'));
     const side = Array.from({ length: 5 }, () => collect('side'));
-    const estimate = (views: Partial<Record<Pose, Sample[]>>) =>
-      silhouetteEstimator.report(views, calibration);
+    const estimate = (
+      views: Partial<Record<Pose, Sample[]>>,
+      options?: { allowPreliminary?: boolean },
+    ) => silhouetteEstimator.report(views, calibration, options);
+    const preliminary = estimate(
+      { front: front.slice(0, 1) },
+      { allowPreliminary: true },
+    );
+    expect(preliminary.estimates.map(({ key }) => key)).toEqual([
+      'shoulder',
+      'sleeve',
+    ]);
+    expect(estimate({ front: front.slice(0, 1) }).estimates).toHaveLength(0);
     expect(estimate({ front }).estimates.map(({ key }) => key)).toEqual([
       'shoulder',
       'sleeve',
@@ -152,7 +168,7 @@ describe('guided video measurements', () => {
     expect(estimate({ front, side }).missing.chest).toBeDefined();
   });
 
-  it('reports explicit progress states from actual measurement dependencies', () => {
+  it('moves estimates from height priors through camera observations to completion', () => {
     const chest = {
       key: 'chest' as const,
       valueCm: 97,
@@ -161,55 +177,90 @@ describe('guided video measurements', () => {
       method: 'Experimental ellipse estimate',
       warnings: [],
     };
+    const emptyReport = { estimates: [], missing: {} };
+    const front: Sample = {
+      scale: 1,
+      widths: { chest: 40 },
+      quality: {
+        landmarkConfidence: 0.9,
+        viewAlignment: 0.9,
+        imageQuality: 0.9,
+        segmentationStability: 0.9,
+        calibrationReliability: 0.7,
+        score: 0.85,
+      },
+    };
+    const side: Sample = { ...front, widths: { chest: 25 } };
+    const prior = progressiveEstimates(175, emptyReport, {}).find(
+      ({ key }) => key === 'chest',
+    )!;
     expect(
-      measurementProgress('chest', {
-        completedViews: ['front'],
+      measurementProgress('chest', prior, {
+        completedViews: [],
         captureActive: false,
+        scanComplete: false,
       }),
     ).toMatchObject({
-      state: 'unavailable',
-      label: 'Not available',
-      detail: 'Needs side view.',
+      state: 'prior',
+      label: 'Prior Estimate',
     });
+    const observing = progressiveEstimates(
+      175,
+      emptyReport,
+      { front: [front] },
+    ).find(({ key }) => key === 'chest')!;
     expect(
-      measurementProgress('chest', {
+      measurementProgress('chest', observing, {
+        completedViews: ['front'],
+        captureActive: true,
+        pose: 'side',
+        scanComplete: false,
+      }).state,
+    ).toBe('observing');
+    const cameraReport = { estimates: [chest], missing: {} };
+    const refining = progressiveEstimates(
+      175,
+      cameraReport,
+      { front: [front], side: [side] },
+    ).find(({ key }) => key === 'chest')!;
+    expect(
+      measurementProgress('chest', refining, {
         pose: 'side',
         completedViews: ['front'],
         captureActive: true,
+        scanComplete: false,
       }).state,
-    ).toBe('collecting');
+    ).toBe('observing');
+    const repeatable = {
+      front: Array.from({ length: 4 }, () => front),
+      side: Array.from({ length: 4 }, () => side),
+    };
+    const stableRefinement = progressiveEstimates(
+      175,
+      cameraReport,
+      repeatable,
+    ).find(({ key }) => key === 'chest')!;
     expect(
-      measurementProgress('chest', {
-        estimate: chest,
-        pose: 'side',
-        completedViews: ['front'],
-        captureActive: true,
-      }).state,
-    ).toBe('preliminary');
-    expect(
-      measurementProgress('chest', {
-        estimate: chest,
-        reviewedEstimate: chest,
+      measurementProgress('chest', stableRefinement, {
         pose: 'back',
         completedViews: ['front', 'side'],
         captureActive: true,
+        scanComplete: false,
       }).state,
-    ).toBe('refined');
+    ).toBe('refining');
+    const complete = progressiveEstimates(
+      175,
+      cameraReport,
+      repeatable,
+      true,
+    ).find(({ key }) => key === 'chest')!;
     expect(
-      measurementProgress('chest', {
-        estimate: chest,
-        reviewedEstimate: chest,
+      measurementProgress('chest', complete, {
         completedViews: ['front', 'side'],
         captureActive: false,
-      }).state,
-    ).toBe('ready');
-    expect(
-      measurementProgress('chest', {
-        estimate: tapeEstimate('chest', 98),
-        completedViews: ['front', 'side'],
-        captureActive: false,
-      }).state,
-    ).toBe('corrected');
+        scanComplete: true,
+      }),
+    ).toMatchObject({ state: 'complete', label: 'Scan Complete' });
   });
 
   it('does not assign a physical interval to tape corrections', () => {

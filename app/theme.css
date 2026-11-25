@@ -1,31 +1,50 @@
 :root {
-  --paper: #f4efe7;
-  --ink: #34251f;
-  --sand: #e9dccb;
-  --copper: #ad684a;
-  --primary: #99583d;
-  --surface: #fffcf8;
-  --muted: #77685e;
-  --line: #d8cab9;
+  --color-plum: #45274f;
+  --color-plum-hover: #351c40;
+  --color-plum-ink: #302833;
+  --color-rose-gold: #c89b91;
+  --color-pearl: #faf5f3;
+  --color-lavender: #ede4f0;
+  --color-white: #ffffff;
+  --color-border: #e4d3d8;
 
-  --primary-hover: #80452e;
-  --primary-active: #6d3825;
-  --ink-accent: #85472f;
-  --control-line: #9c8674;
-  --focus: #99583d;
-  --muted-on-sand: #65564b;
-  --success: #4e6044;
-  --success-surface: #edf0e7;
-  --warning: #744718;
-  --warning-surface: #f6e8d5;
-  --danger: #872f2b;
-  --danger-surface: #f7e8e2;
-  --camera-surface: #392c26;
-  --camera-badge: #34251ff2;
-  --camera-guide: #ffefe0;
-  --camera-detail: #ffc5a5;
+  --paper: var(--color-pearl);
+  --ink: var(--color-plum-ink);
+  --lavender: var(--color-lavender);
+  --rose-gold: var(--color-rose-gold);
+  --primary: var(--color-plum);
+  --primary-hover: var(--color-plum-hover);
+  --primary-active: #2b1734;
+  --surface: var(--color-white);
+  --muted: #625a64;
+  --line: var(--color-border);
+  --ink-accent: var(--primary);
+  --control-line: #817783;
+  --focus: var(--primary);
+  --muted-on-lavender: #57505a;
 
-  --google-fill: #fff;
+  --success: #285b46;
+  --success-surface: #e8f4ee;
+  --warning: #745318;
+  --warning-surface: #fff2da;
+  --danger: #842e38;
+  --danger-surface: #f9e8eb;
+
+  --camera-surface: var(--ink);
+  --camera-badge: color-mix(in srgb, var(--ink) 94%, transparent);
+  --camera-guide: var(--paper);
+  --camera-detail: var(--rose-gold);
+  --on-dark: var(--paper);
+  --on-dark-muted: #e2d9e5;
+  --on-dark-border: #927b95;
+  --mesh-face: var(--rose-gold);
+  --mesh-outline: var(--primary);
+  --mesh-preview-background: #301b3d;
+  --mesh-preview-surface: #806b84;
+  --mesh-preview-edge: #c99583;
+  --mesh-preview-landmark: #f8f1eb;
+
+  --google-fill: #ffffff;
   --google-text: #1f1f1f;
   --google-line: #747775;
   --facebook-blue: #1877f2;
@@ -48,6 +67,9 @@
   --radius-control: 0.375rem;
   --radius-card: 0.625rem;
   --radius-pill: 999px;
-  --shadow-card: 0 2px 4px #34251f07, 0 12px 30px #34251f09;
+  --shadow-card:
+    0 2px 4px color-mix(in srgb, var(--ink) 4%, transparent),
+    0 12px 30px color-mix(in srgb, var(--ink) 7%, transparent);
+  --shadow-dropdown: 0 8px 14px color-mix(in srgb, var(--ink) 12%, transparent);
   --target: 2.75rem;
 }

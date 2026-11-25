@@ -16,6 +16,7 @@ model User {
   updatedAt         DateTime             @updatedAt
   consentEvents     ConsentEvent[]
   accounts          Account[]
+  passwordLogin     PasswordLogin?
   sessions          Session[]
   profiles          MeasurementProfile[]
   organizedGroups   FamilyGroup[]        @relation("GroupOrganizer")
@@ -62,6 +63,21 @@ model Account {
 
   @@id([provider, providerAccountId])
   @@unique([userId, provider])
+}
+
+model PasswordLogin {
+  userId       String @id
+  username     String @unique
+  passwordHash String
+  user         User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PasswordAttempt {
+  key       String   @id
+  attempts  Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }
 
 model Session {

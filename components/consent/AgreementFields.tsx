@@ -50,42 +50,60 @@ export function AgreementFields({
             />
           ))}
           {types.includes('CAMERA') && (
-            <div>
-              <label className="consent">
-                <input type="checkbox" name="CAMERA" required />I consent to
-                camera-based body measurement processing.
-              </label>
-              <p>
-                <AgreementLink type="CAMERA" />
-              </p>
+            <div className="consent consent-with-agreement">
+              <input
+                id="camera-body-measurement-consent"
+                type="checkbox"
+                name="CAMERA"
+                required
+              />
+              <div>
+                <label htmlFor="camera-body-measurement-consent">
+                  I consent to camera-based body measurement processing.
+                </label>{' '}
+                (
+                <AgreementLink type="CAMERA" />)
+              </div>
             </div>
           )}
           {types.includes('ACCURACY') && (
-            <div>
-              <label className="consent">
-                <input type="checkbox" name="ACCURACY" required />I understand
-                that measurements are estimates and may contain errors.
-              </label>
-              <p>
-                <AgreementLink type="ACCURACY" />
-              </p>
+            <div className="consent consent-with-agreement">
+              <input
+                id="measurement-accuracy-consent"
+                type="checkbox"
+                name="ACCURACY"
+                required
+              />
+              <div>
+                <label htmlFor="measurement-accuracy-consent">
+                  I understand that measurements are estimates and may contain
+                  errors.
+                </label>{' '}
+                (
+                <AgreementLink type="ACCURACY" />)
+              </div>
             </div>
           )}
           {account && (
-            <div>
-              <label className="consent">
-                <input type="checkbox" name="ACCOUNT" required />
-                {types.includes('TERMS') && types.includes('PRIVACY')
-                  ? 'I agree to the Terms of Service and acknowledge the Privacy Policy.'
-                  : types.includes('TERMS')
-                    ? 'I agree to the Terms of Service.'
-                    : 'I acknowledge the Privacy Policy.'}
-              </label>
-              <p>
-                {types.includes('TERMS') && <AgreementLink type="TERMS" />}
+            <div className="consent consent-with-agreement">
+              <input
+                id="account-agreement-consent"
+                type="checkbox"
+                name="ACCOUNT"
+                required
+              />
+              <div>
+                <label htmlFor="account-agreement-consent">
+                  {types.includes('TERMS') && types.includes('PRIVACY')
+                    ? 'I agree to the Terms of Service and acknowledge the Privacy Policy.'
+                    : types.includes('TERMS')
+                      ? 'I agree to the Terms of Service.'
+                      : 'I acknowledge the Privacy Policy.'}
+                </label>{' '}
+                ({types.includes('TERMS') && <AgreementLink type="TERMS" />}
                 {types.includes('TERMS') && types.includes('PRIVACY') && ' · '}
-                {types.includes('PRIVACY') && <AgreementLink type="PRIVACY" />}
-              </p>
+                {types.includes('PRIVACY') && <AgreementLink type="PRIVACY" />})
+              </div>
             </div>
           )}
         </fieldset>
@@ -98,13 +116,22 @@ export function AgreementFields({
             name="version-IMPROVEMENT"
             value={agreements.IMPROVEMENT.version}
           />
-          <label className="consent">
-            <input type="checkbox" name="IMPROVEMENT" />I allow my measurement
-            data to be used to improve ContourStitch.
-          </label>
+          <div className="consent consent-with-agreement">
+            <input
+              id="optional-improvement-consent"
+              type="checkbox"
+              name="IMPROVEMENT"
+            />
+            <div>
+              <label htmlFor="optional-improvement-consent">
+                I allow my measurement data to be used to improve ContourStitch.
+              </label>{' '}
+              (<AgreementLink type="IMPROVEMENT" />)
+            </div>
+          </div>
           <p className="muted">
             You can use ContourStitch without sharing and withdraw permission in
-            My Account. <AgreementLink type="IMPROVEMENT" />
+            My Account.
           </p>
         </fieldset>
       )}

@@ -1,6 +1,9 @@
 'use client';
 import { useState } from 'react';
 import { inchesToCm, cmToInches, validHeight } from '@/lib/measurement/units';
+
+const defaultHeightInches = 5 * 12 + 4;
+
 export function HeightForm({
   onContinue,
   continueLabel = 'Continue to photos →',
@@ -8,10 +11,10 @@ export function HeightForm({
   onContinue: (cm: number) => void;
   continueLabel?: string;
 }) {
-  const [unit, setUnit] = useState<'cm' | 'ft'>('cm');
-  const [cm, setCm] = useState('170');
+  const [unit, setUnit] = useState<'cm' | 'ft'>('ft');
+  const [cm, setCm] = useState(String(inchesToCm(defaultHeightInches)));
   const [feet, setFeet] = useState('5');
-  const [inches, setInches] = useState('7');
+  const [inches, setInches] = useState('4');
   const [error, setError] = useState('');
   function toggle(next: 'cm' | 'ft') {
     if (next === 'ft') {

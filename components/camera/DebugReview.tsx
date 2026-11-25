@@ -19,7 +19,7 @@ export function DebugReview({ capture }: { capture: Capture }) {
     const palette = getComputedStyle(canvas.current);
     context.save();
     context.globalCompositeOperation = 'source-in';
-    context.fillStyle = palette.getPropertyValue('--copper').trim();
+    context.fillStyle = palette.getPropertyValue('--rose-gold').trim();
     context.fillRect(0, 0, mask.width, mask.height);
     context.restore();
     const levels = samplingLevels(capture);

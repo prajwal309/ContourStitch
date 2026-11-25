@@ -37,13 +37,20 @@ export function ConsentPreference({
             name="version-IMPROVEMENT"
             value={agreements.IMPROVEMENT.version}
           />
-          <label className="consent">
-            <input type="checkbox" name="IMPROVEMENT" required />I allow my
-            measurement data to be used to improve ContourStitch.
-          </label>
-          <p>
-            <AgreementLink type="IMPROVEMENT" />
-          </p>
+          <div className="consent consent-with-agreement">
+            <input
+              id="privacy-improvement-consent"
+              type="checkbox"
+              name="IMPROVEMENT"
+              required
+            />
+            <div>
+              <label htmlFor="privacy-improvement-consent">
+                I allow my measurement data to be used to improve ContourStitch.
+              </label>{' '}
+              (<AgreementLink type="IMPROVEMENT" />)
+            </div>
+          </div>
         </>
       )}
       <button className="secondary-button" disabled={pending}>

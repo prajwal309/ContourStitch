@@ -12,7 +12,7 @@ test('the homepage focuses on measurement while shop routes are paused', async (
   );
   await expect(
     page.getByRole('heading', {
-      name: 'ContourStitch One measure. Endless fits.',
+      name: 'One measure. Endless fits.',
     }),
   ).toBeVisible();
   await expect(page.locator('a[href^="/shop"]')).toHaveCount(0);
@@ -24,7 +24,7 @@ test('the homepage focuses on measurement while shop routes are paused', async (
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
-  await page.getByRole('link', { name: 'Create My Fit Profile' }).click();
+  await page.getByRole('link', { name: 'Find My Fit' }).click();
   await expect(page).toHaveURL(/\/measure$/);
   for (const path of [
     '/shop',

@@ -22,4 +22,14 @@ export const liveConfig = {
   minNeckBandFraction: 0.035,
   minSideYaw: 65,
   viewToleranceDegrees: 25,
+  // Relative display/fusion weights, not calibrated measurement-accuracy probabilities.
+  progressive: {
+    cameraWeightCap: 0.9,
+    cameraUncertaintyFloor: 0.4,
+    contradictionScale: 0.25,
+    imageQualitySaturation: 2,
+    heightCalibrationWeight: 0.7,
+    referenceCalibrationWeight: 0.85,
+    missingSampleQuality: 0.5,
+  },
 } as const;

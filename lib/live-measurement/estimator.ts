@@ -17,11 +17,21 @@ import type { Calibration } from './calibration';
 type Torso = 'chest' | 'waist' | 'hip';
 type Dimension = Torso | 'neck';
 type Sides = NonNullable<MeasurementEstimate['sidesCm']>;
+export type SampleQuality = {
+  landmarkConfidence: number;
+  viewAlignment: number;
+  imageQuality: number;
+  segmentationStability: number;
+  calibrationReliability: number;
+  score: number;
+};
 export type Sample = {
   scale: number;
   widths: Partial<Record<Dimension, number>>;
   arms?: Sides;
   shoulder?: number;
+  torsoCm?: number;
+  quality?: SampleQuality;
 };
 type Views = Partial<Record<Pose, readonly Sample[]>>;
 
@@ -32,7 +42,11 @@ export interface LiveEstimator {
     pose: Pose,
     calibration: Calibration,
   ): Sample | null;
-  report(views: Views, calibration: Calibration): MeasurementReport;
+  report(
+    views: Views,
+    calibration: Calibration,
+    options?: { allowPreliminary?: boolean },
+  ): MeasurementReport;
 }
 
 function limbs(
@@ -161,6 +175,76 @@ function neckWidth(
   return neck && upperTorso && neck < upperTorso ? neck : null;
 }
 
+function bounded(value: number) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function sampleQuality(
+  frame: VisionFrame,
+  bounds: Bounds,
+  pose: Pose,
+  calibration: Calibration,
+): SampleQuality {
+  const indices =
+    pose === 'side'
+      ? [11, 12, 23, 24, 13, 14, 15, 16]
+      : [11, 12, 13, 14, 15, 16, 23, 24];
+  const landmarkConfidence =
+    indices.reduce(
+      (sum, index) => sum + (usable(frame.landmarks[index]) ? frame.landmarks[index].visibility : 0),
+      0,
+    ) / indices.length;
+
+  const left = frame.landmarks[11];
+  const right = frame.landmarks[12];
+  const yaw =
+    usable(left) && usable(right)
+      ? Math.abs(
+          (Math.atan2(right.z - left.z, left.x - right.x) * 180) / Math.PI,
+        )
+      : 180;
+  const targetYaw =
+    pose === 'back' ? 180 : pose === 'side' ? 90 : 0;
+  const viewAlignment = bounded(
+    1 - Math.abs(yaw - targetYaw) / c.viewToleranceDegrees,
+  );
+  const imageQuality =
+    (Math.min(
+      1,
+      frame.brightness /
+        (imageConfig.minBrightness * c.progressive.imageQualitySaturation),
+    ) +
+      Math.min(
+        1,
+        frame.sharpness /
+          (imageConfig.minSharpness * c.progressive.imageQualitySaturation),
+      )) /
+    2;
+  const segmentationStability = bounded(
+    1 - bounds.instability / imageConfig.maxMaskInstability,
+  );
+  const calibrationReliability =
+    calibration.kind === 'reference'
+      ? c.progressive.referenceCalibrationWeight
+      : c.progressive.heightCalibrationWeight;
+  const factors = [
+    bounded(landmarkConfidence),
+    viewAlignment,
+    imageQuality,
+    segmentationStability,
+    calibrationReliability,
+  ];
+
+  return {
+    landmarkConfidence,
+    viewAlignment,
+    imageQuality,
+    segmentationStability,
+    calibrationReliability,
+    score: Math.pow(factors.reduce((product, factor) => product * factor, 1), 1 / factors.length),
+  };
+}
+
 function sample(
   frame: VisionFrame,
   bounds: Bounds,
@@ -175,7 +259,11 @@ function sample(
   );
   if (!cmPerPixel) return null;
 
-  const evidence: Sample = { scale: bounds.height / mask.height, widths: {} };
+  const evidence: Sample = {
+    scale: bounds.height / mask.height,
+    widths: {},
+    quality: sampleQuality(frame, bounds, pose, calibration),
+  };
   if (pose === 'front' || pose === 'back' || pose === 'extended') {
     evidence.arms = limbs(frame, cmPerPixel, pose === 'extended');
   }
@@ -192,6 +280,8 @@ function sample(
   if (!torso) return evidence;
   const torsoHeight = torso.to - torso.from;
   const maskToCm = (cmPerPixel * frame.width) / mask.width;
+  if (pose === 'front' || pose === 'back')
+    evidence.torsoCm = torsoHeight * cmPerPixel;
 
   if (pose !== 'neck') {
     for (const key of ['chest', 'waist', 'hip'] as const) {
@@ -210,6 +300,7 @@ function sample(
 function stable(
   samples: readonly Sample[] | undefined,
   read: (sample: Sample) => number | undefined,
+  allowPreliminary = false,
 ) {
   const values = (samples ?? [])
     .flatMap((sample) => {
@@ -220,7 +311,11 @@ function stable(
     })
     .sort((a, b) => a - b);
   const middle = median(values);
-  if (middle === null || values.length < c.minimumFrames) return null;
+  if (
+    middle === null ||
+    values.length < (allowPreliminary ? 1 : c.minimumFrames)
+  )
+    return null;
   const low = values[Math.floor((values.length - 1) / 5)];
   const high = values[Math.ceil(((values.length - 1) * 4) / 5)];
   return (high - low) / middle <= c.maximumSpread ? middle : null;
@@ -230,7 +325,12 @@ function consistent(a: number, b: number) {
   return Math.abs(a - b) / Math.max(a, b) <= c.crossViewTolerance;
 }
 
-function report(views: Views, calibration: Calibration): MeasurementReport {
+function report(
+  views: Views,
+  calibration: Calibration,
+  options: { allowPreliminary?: boolean } = {},
+): MeasurementReport {
+  const allowPreliminary = options.allowPreliminary ?? false;
   const result: MeasurementReport = {
     source: 'live-video',
     estimates: [],
@@ -272,12 +372,16 @@ function report(views: Views, calibration: Calibration): MeasurementReport {
   }
 
   function armAndSleeve(pose: 'extended' | 'front') {
-    const left = stable(views[pose], (s) => s.arms?.left);
-    const right = stable(views[pose], (s) => s.arms?.right);
+    const left = stable(views[pose], (s) => s.arms?.left, allowPreliminary);
+    const right = stable(views[pose], (s) => s.arms?.right, allowPreliminary);
     if (!left || !right) return undefined;
     if (pose === 'extended') return { left, right };
-    const rearLeft = stable(views.back, (s) => s.arms?.left);
-    const rearRight = stable(views.back, (s) => s.arms?.right);
+    const rearLeft = stable(views.back, (s) => s.arms?.left, allowPreliminary);
+    const rearRight = stable(
+      views.back,
+      (s) => s.arms?.right,
+      allowPreliminary,
+    );
     if (
       (rearLeft && !consistent(left, rearLeft)) ||
       (rearRight && !consistent(right, rearRight))
@@ -291,7 +395,7 @@ function report(views: Views, calibration: Calibration): MeasurementReport {
 
   const arm = armAndSleeve('extended');
   const sleeve = armAndSleeve('front');
-  const shoulder = stable(views.front, (s) => s.shoulder);
+  const shoulder = stable(views.front, (s) => s.shoulder, allowPreliminary);
   add(
     'shoulder',
     shoulder,
@@ -313,14 +417,24 @@ function report(views: Views, calibration: Calibration): MeasurementReport {
     sleeve,
   );
 
-  const sideScale = stable(views.side, (s) => s.scale);
+  const sideScale = stable(views.side, (s) => s.scale, allowPreliminary);
   for (const key of ['chest', 'waist', 'hip', 'neck'] as const) {
     const widthPose = key === 'neck' ? 'neck' : 'front';
-    const frontal = stable(views[widthPose], (s) => s.widths[key]);
-    const side = stable(views.side, (s) => s.widths[key]);
+    const frontal = stable(
+      views[widthPose],
+      (s) => s.widths[key],
+      allowPreliminary,
+    );
+    const side = stable(views.side, (s) => s.widths[key], allowPreliminary);
     const rear =
-      key === 'neck' ? null : stable(views.back, (s) => s.widths[key]);
-    const frontScale = stable(views[widthPose], (s) => s.scale);
+      key === 'neck'
+        ? null
+        : stable(views.back, (s) => s.widths[key], allowPreliminary);
+    const frontScale = stable(
+      views[widthPose],
+      (s) => s.scale,
+      allowPreliminary,
+    );
     const matchedScale =
       frontScale && sideScale && consistent(frontScale, sideScale);
     const agreed = frontal && (!rear || consistent(frontal, rear));

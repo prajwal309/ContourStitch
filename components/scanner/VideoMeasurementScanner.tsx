@@ -18,6 +18,8 @@ import type {
   VisualHullResult,
 } from '@/lib/reconstruction/types';
 import { MeshPreview } from '@/components/reconstruction/MeshPreview';
+import { VoiceControls } from '@/components/voice/VoiceControls';
+import { useVoiceGuidance } from '@/components/voice/useVoiceGuidance';
 export function VideoMeasurementScanner({
   heightCm,
   onClose,
@@ -50,48 +52,17 @@ export function VideoMeasurementScanner({
   const [processing, setProcessing] = useState(false);
   const [processingMs, setProcessingMs] = useState<number | null>(null);
   const [meshBytes, setMeshBytes] = useState<number | null>(null);
-  const [voice, setVoice] = useState<SpeechSynthesisVoice | null>(null);
-  const [voiceNotice, setVoiceNotice] = useState('');
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
-      window.speechSynthesis?.cancel();
     };
   }, []);
   const spokenInstruction = snapshot
     ? instructions[snapshot.instruction]
     : undefined;
-  useEffect(() => {
-    if (!voice || !spokenInstruction || error) return;
-    window.speechSynthesis.cancel();
-    const request = new SpeechSynthesisUtterance(spokenInstruction);
-    request.lang = voice.lang;
-    request.voice = voice;
-    window.speechSynthesis.speak(request);
-    return () => window.speechSynthesis.cancel();
-  }, [voice, spokenInstruction, error]);
-  function toggleVoiceGuidance() {
-    if (voice) {
-      window.speechSynthesis.cancel();
-      setVoice(null);
-      return;
-    }
-    const local = window.speechSynthesis
-      ?.getVoices()
-      .find(
-        (item) => item.localService && item.lang.toLowerCase().startsWith('en'),
-      );
-    if (local && typeof SpeechSynthesisUtterance !== 'undefined') {
-      setVoiceNotice('');
-      setVoice(local);
-    } else {
-      setVoiceNotice(
-        'A local English voice is unavailable. Follow the on-screen instructions.',
-      );
-    }
-  }
+  const voiceGuidance = useVoiceGuidance(error ? undefined : spokenInstruction);
   async function runModel() {
     if (!snapshot?.result) return;
     setModelStatus('Loading development model…');
@@ -389,14 +360,7 @@ export function VideoMeasurementScanner({
           >
             Switch camera · {facing === 'environment' ? 'rear' : 'front'}
           </button>
-          <button
-            className="secondary-button"
-            type="button"
-            onClick={toggleVoiceGuidance}
-          >
-            {voice ? 'Mute spoken guidance' : 'Enable spoken guidance'}
-          </button>
-          {voiceNotice && <p role="status">{voiceNotice}</p>}
+          <VoiceControls guidance={voiceGuidance} />
         </>
       )}
       {result && (

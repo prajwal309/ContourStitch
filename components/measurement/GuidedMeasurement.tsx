@@ -33,7 +33,10 @@ export function GuidedMeasurement({ access }: { access: MeasurementAccess }) {
     review({ source: 'live-video', estimates: [], missing: {} });
 
   return (
-    <main id="main" className={`flow${step === 'scan' ? ' live-flow' : ''}`}>
+    <main
+      id="main"
+      className={`flow${step === 'consent' ? ' consent-flow' : ''}${step === 'scan' ? ' live-flow' : ''}`}
+    >
       <section className="flow-card">
         <p className="eyebrow">One measure. Endless fits.</p>
         <h1>

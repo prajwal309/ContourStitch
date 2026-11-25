@@ -5,7 +5,7 @@ import {
   agreements,
   agreementTypes,
 } from '@/lib/consent/agreements';
-import { documents } from '@/lib/consent/documents';
+import { documentLastUpdated, documents } from '@/lib/consent/documents';
 
 type Params = { document: string; revision?: string[] };
 
@@ -15,7 +15,13 @@ function findDocument({ document, revision = [] }: Params) {
   const agreement = agreements[type];
   const version = revision[0] ?? agreement.version;
   if (!Object.hasOwn(documents[type], version)) notFound();
-  return { ...agreement, type, version, sections: documents[type][version] };
+  return {
+    ...agreement,
+    type,
+    version,
+    lastUpdated: documentLastUpdated[type][version],
+    sections: documents[type][version],
+  };
 }
 
 export async function generateMetadata({
@@ -45,18 +51,28 @@ export default async function LegalDocument({
 }: {
   params: Promise<Params>;
 }) {
-  const { title, type, version, sections } = findDocument(await params);
+  const { title, type, version, lastUpdated, sections } = findDocument(
+    await params,
+  );
   return (
     <main id="main" className="flow legal-flow">
       <article className="flow-card legal-document">
         <p className="eyebrow">ContourStitch · One measure. Endless fits.</p>
         <h1>{title}</h1>
         <p className="legal-version">
-          Version {version} · Draft pending legal review
+          Version {version} · Last updated{' '}
+          {lastUpdated ? (
+            <time dateTime={lastUpdated}>{lastUpdated}</time>
+          ) : (
+            'date not recorded for this archived revision'
+          )}{' '}
+          · Draft pending legal review
         </p>
-        {sections.map(({ title, text }) => (
+        {sections.map(({ title, text }, index) => (
           <section key={title}>
-            <h2>{title}</h2>
+            <h2>
+              {index + 1}. {title}
+            </h2>
             <p>{text}</p>
           </section>
         ))}

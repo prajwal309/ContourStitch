@@ -2,5 +2,5 @@ export const brand = {
   name: 'ContourStitch',
   tagline: 'One measure. Endless fits.',
   description:
-    'Find your fit once, save your measurements, and use them again for clothing you love—from everyday outfits to weddings and family celebrations.',
+    'Use guided video or tape entry to find your fit. Review, save and reuse your measurements for tailoring, online size guides and family fittings.',
 } as const;

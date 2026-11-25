@@ -3,6 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { authentication, currentUser, enabledProviders } from './auth';
+import { revokeDatabaseSession } from './sessions';
 import { database } from './db';
 import { accountReturnPath, agreementReviewPath } from './return-path';
 import {
@@ -12,11 +13,10 @@ import {
 } from './oauth-intent';
 
 import {
-  accountAgreements,
   agreementTypes,
-  cameraAgreements,
   checkedVersions,
   matchesVersions,
+  validRegistrationVersions,
   type ConsentVersions,
 } from '@/lib/consent/agreements';
 import { hasAccountAgreements } from '@/lib/consent/store';
@@ -26,11 +26,11 @@ export async function registerOAuth(nextPath: string, form: FormData) {
   const versions = checkedVersions(form, agreementTypes);
   if (
     typeof provider !== 'string' ||
-    !matchesVersions(versions, [...accountAgreements, ...cameraAgreements]) ||
+    !validRegistrationVersions(versions) ||
     (form.has('IMPROVEMENT') && !matchesVersions(versions, ['IMPROVEMENT']))
   ) {
     redirect(
-      `/sign-in?mode=register&error=Agreements&next=${encodeURIComponent(accountReturnPath(nextPath))}`,
+      `/sign-in?mode=register&method=provider&error=Agreements&next=${encodeURIComponent(accountReturnPath(nextPath))}`,
     );
   }
   await beginOAuth(provider, null, nextPath, versions);
@@ -110,6 +110,7 @@ async function beginOAuth(
 
 export async function leaveAccount() {
   (await cookies()).delete(oauthIntentCookie);
-  if (!authentication) redirect('/');
-  await authentication.signOut({ redirectTo: '/' });
+  if (authentication) await authentication.signOut({ redirectTo: '/' });
+  else await revokeDatabaseSession();
+  redirect('/');
 }

@@ -19,9 +19,10 @@ describe('sign-in deployment configuration', () => {
     const config = inspectAuthConfiguration({ DATABASE_URL: database });
     expect(config.origin).toBeNull();
     expect(config.providers).toEqual({ google: false, facebook: false });
-    expect(config.problems.join(' ')).toMatch(
-      /AUTH_URL.*AUTH_SECRET.*AUTH_GOOGLE_ID.*AUTH_FACEBOOK_ID/,
-    );
+    expect(config.problems).toEqual([
+      'AUTH_URL must be a valid application origin (HTTPS on Vercel)',
+    ]);
+    expect(config.oauthEnabled).toBe(false);
   });
 
   it('accepts the Auth.js base path and enables a complete provider independently', () => {
@@ -30,6 +31,7 @@ describe('sign-in deployment configuration', () => {
       secure: false,
       providers: { google: true, facebook: false },
       problems: [],
+      oauthEnabled: true,
     });
     const facebook = inspectAuthConfiguration({
       ...configured,
@@ -72,6 +74,32 @@ describe('sign-in deployment configuration', () => {
       inspectAuthConfiguration({ ...env, AUTH_URL: 'http://localhost:3000' })
         .problems[0],
     ).toContain('HTTPS');
+  });
+
+  it('enables password accounts in Vercel production with only a database URL and the system origin', () => {
+    expect(
+      inspectAuthConfiguration({
+        VERCEL: '1',
+        VERCEL_ENV: 'production',
+        VERCEL_PROJECT_PRODUCTION_URL: 'contourstitch.example',
+        DATABASE_URL_POOLED: database,
+      }),
+    ).toEqual({
+      origin: 'https://contourstitch.example',
+      secure: true,
+      providers: { google: false, facebook: false },
+      problems: [],
+      oauthEnabled: false,
+    });
+  });
+
+  it('keeps password accounts available if optional OAuth lacks a valid secret', () => {
+    expect(
+      inspectAuthConfiguration({ ...configured, AUTH_SECRET: 'short' }),
+    ).toMatchObject({
+      problems: [],
+      oauthEnabled: false,
+    });
   });
 
   it('prefers the pooled URL and only reports the variable name for an invalid URL', () => {

@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
-import Image from 'next/image';
 import localFont from 'next/font/local';
 
 import { SessionProvider } from '@/components/SessionProvider';
 import { brand } from '@/lib/brand';
-import { agreementPath } from '@/lib/consent/agreements';
+import { SiteNavigation } from '@/components/site/SiteNavigation';
+import { SiteFooter } from '@/components/site/SiteFooter';
 
 import './globals.css';
+import './landing.css';
 
 const editorial = localFont({
   src: [
@@ -78,58 +78,9 @@ export default function RootLayout({
             Skip to content
           </a>
 
-          <header className="site-header">
-            <Link href="/" className="brand">
-              <Image
-                src="/logo/logo.png"
-                alt=""
-                width={72}
-                height={72}
-                className="brand-logo"
-              />
-              {brand.name}
-              <span className="beta">BETA</span>
-            </Link>
-
-            <nav aria-label="Main navigation">
-              <Link href="/founder">Founder</Link>
-              <Link href="/measure">Measure</Link>
-              <Link
-                href="/my-measurements"
-                className="account-nav"
-                prefetch={false}
-              >
-                My Fit Profile
-              </Link>
-              <Link href="/family-fit" prefetch={false}>
-                Family Fit Studio
-              </Link>
-              <Link href="/account" prefetch={false}>
-                My Account
-              </Link>
-            </nav>
-          </header>
-
+          <SiteNavigation />
           {children}
-
-          <footer>
-            <Link href="/" className="brand small">
-              <Image
-                src="/logo/logo.png"
-                alt=""
-                width={36}
-                height={36}
-                className="brand-logo"
-              />
-              {brand.name}
-            </Link>
-
-            <span>{brand.tagline}</span>
-            <nav className="footer-legal" aria-label="Legal">
-              <Link href={agreementPath('TERMS')}>Terms of Service</Link>
-              <Link href={agreementPath('PRIVACY')}>Privacy Policy</Link>
-            </nav>
-          </footer>
+          <SiteFooter />
         </SessionProvider>
       </body>
     </html>

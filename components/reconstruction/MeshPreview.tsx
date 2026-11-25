@@ -12,6 +12,9 @@ export function MeshPreview({ mesh }: { mesh: ReconstructionMesh }) {
     const element = canvas.current;
     const context = element?.getContext('2d');
     if (!element || !context) return;
+    const palette = getComputedStyle(element);
+    const meshFace = palette.getPropertyValue('--mesh-face').trim();
+    const meshOutline = palette.getPropertyValue('--mesh-outline').trim();
     const width = Math.max(320, element.clientWidth);
     const height = 300;
     const ratio = window.devicePixelRatio || 1;
@@ -64,12 +67,15 @@ export function MeshPreview({ mesh }: { mesh: ReconstructionMesh }) {
       context.lineTo(triangle.b.x, triangle.b.y);
       context.lineTo(triangle.c.x, triangle.c.y);
       context.closePath();
-      context.fillStyle = 'rgba(177, 139, 94, 0.72)';
-      context.strokeStyle = 'rgba(62, 47, 34, 0.2)';
+      context.fillStyle = meshFace;
+      context.strokeStyle = meshOutline;
       context.lineWidth = 0.45;
+      context.globalAlpha = 0.72;
       context.fill();
+      context.globalAlpha = 0.2;
       context.stroke();
     }
+    context.globalAlpha = 1;
   }, [mesh, rotation]);
 
   return (

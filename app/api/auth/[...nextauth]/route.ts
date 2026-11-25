@@ -1,5 +1,5 @@
 import type { NextRequest } from 'next/server';
-import { authentication } from '@/lib/auth/auth';
+import { accountSignInEnabled, authentication } from '@/lib/auth/auth';
 
 export const runtime = 'nodejs';
 
@@ -10,7 +10,14 @@ function unavailable() {
   });
 }
 
-export const GET = (request: NextRequest) =>
-  authentication?.handlers.GET(request) ?? unavailable();
+export const GET = (request: NextRequest) => {
+  if (authentication) return authentication.handlers.GET(request);
+  if (
+    accountSignInEnabled &&
+    request.nextUrl.pathname === '/api/auth/providers'
+  )
+    return Response.json({}, { headers: { 'Cache-Control': 'no-store' } });
+  return unavailable();
+};
 export const POST = (request: NextRequest) =>
   authentication?.handlers.POST(request) ?? unavailable();

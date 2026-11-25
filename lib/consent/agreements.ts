@@ -1,20 +1,20 @@
 export const agreements = {
-  TERMS: { slug: 'terms', title: 'Terms of Service', version: '1' },
-  PRIVACY: { slug: 'privacy', title: 'Privacy Policy', version: '1' },
+  TERMS: { slug: 'terms', title: 'Terms of Service', version: '2' },
+  PRIVACY: { slug: 'privacy', title: 'Privacy Policy', version: '4' },
   CAMERA: {
     slug: 'body-measurement-consent',
     title: 'Body Measurement Consent',
-    version: '1',
+    version: '3',
   },
   ACCURACY: {
     slug: 'measurement-accuracy',
     title: 'Measurement Accuracy Disclaimer',
-    version: '1',
+    version: '3',
   },
   IMPROVEMENT: {
     slug: 'measurement-data-improvement',
     title: 'Optional Measurement Data Use',
-    version: '1',
+    version: '2',
   },
 } as const;
 
@@ -22,6 +22,11 @@ export type Agreement = keyof typeof agreements;
 export const agreementTypes = Object.keys(agreements) as Agreement[];
 export const accountAgreements = ['TERMS', 'PRIVACY'] as const;
 export const cameraAgreements = ['CAMERA', 'ACCURACY'] as const;
+export const registrationAgreements = [
+  ...cameraAgreements,
+  ...accountAgreements,
+] as const;
+
 export type ConsentVersions = Partial<Record<Agreement, string>>;
 export type ConsentState = Partial<Record<Agreement, ConsentEvent>>;
 export type ConsentEvent = {
@@ -58,6 +63,14 @@ export function matchesVersions(
   required: readonly Agreement[],
 ) {
   return required.every((type) => versions[type] === agreements[type].version);
+}
+
+export function validRegistrationVersions(versions: ConsentVersions) {
+  return (
+    matchesVersions(versions, registrationAgreements) &&
+    (versions.IMPROVEMENT === undefined ||
+      matchesVersions(versions, ['IMPROVEMENT']))
+  );
 }
 
 export function checkedVersions(

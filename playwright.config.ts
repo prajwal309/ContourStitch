@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
 
 const testDatabase = process.env.CONTOURSTITCH_TEST_DATABASE_URL;
+const passwordOnly = process.env.CONTOURSTITCH_TEST_PASSWORD_ONLY === '1';
 const baseURL = 'http://localhost:3100';
 const providerMock = fileURLToPath(
   new URL('./e2e/oauth-provider-mock.mjs', import.meta.url),
@@ -22,14 +23,16 @@ export default defineConfig({
     env: testDatabase
       ? {
           AUTH_URL: `${baseURL}/api/auth`,
-          AUTH_SECRET: 'local-test-secret-for-playwright-oauth-only',
-          AUTH_GOOGLE_ID: 'test-google-client',
-          AUTH_GOOGLE_SECRET: 'test-google-secret',
-          AUTH_FACEBOOK_ID: 'test-facebook-client',
-          AUTH_FACEBOOK_SECRET: 'test-facebook-secret',
+          AUTH_SECRET: passwordOnly
+            ? ''
+            : 'local-test-secret-for-playwright-oauth-only',
+          AUTH_GOOGLE_ID: passwordOnly ? '' : 'test-google-client',
+          AUTH_GOOGLE_SECRET: passwordOnly ? '' : 'test-google-secret',
+          AUTH_FACEBOOK_ID: passwordOnly ? '' : 'test-facebook-client',
+          AUTH_FACEBOOK_SECRET: passwordOnly ? '' : 'test-facebook-secret',
           DATABASE_URL: testDatabase,
           DATABASE_URL_POOLED: testDatabase,
-          NODE_OPTIONS: `--import="${providerMock}"`,
+          NODE_OPTIONS: passwordOnly ? '' : `--import="${providerMock}"`,
         }
       : undefined,
     reuseExistingServer: false,
