@@ -89,7 +89,10 @@ test('creates and signs in to an account with a password, with consent and a rev
     expect(login.user.accounts).toHaveLength(0);
     expect(
       login.user.consentEvents.filter(({ status }) => status === 'ACCEPTED'),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
+    expect(
+      login.user.consentEvents.some(({ type }) => type === 'BODY_MEASUREMENT'),
+    ).toBe(false);
     expect(
       login.user.consentEvents.find(({ type }) => type === 'IMPROVEMENT')
         ?.status,
@@ -171,8 +174,8 @@ test('rejects breached passwords and duplicate registrations and resets a passwo
     adapter: new PrismaPg({ connectionString: databaseUrl }),
   });
   const username = `recovery.${randomUUID().slice(0, 8)}`;
-  const initial = 'The studio window faces west';
-  const updated = 'Ivory wool and a pearl button';
+  const initial = 'The studio window faces west!';
+  const updated = 'Ivory wool and a pearl button!';
   const other = await browser.newContext({ baseURL });
 
   async function register(
@@ -182,11 +185,6 @@ test('rejects breached passwords and duplicate registrations and resets a passwo
     await target.goto('/sign-in?mode=register&next=%2Faccount');
     await target
       .getByRole('checkbox', { name: /^I agree to the Terms/ })
-      .check();
-    await target
-      .getByRole('checkbox', {
-        name: /^I agree to the Body Measurement Consent/,
-      })
       .check();
     await target.getByLabel('Username', { exact: true }).fill(username);
     await target.getByLabel('Password', { exact: true }).fill(password);
@@ -208,7 +206,7 @@ test('rejects breached passwords and duplicate registrations and resets a passwo
   }
 
   try {
-    await register(page, 'correcthorsebatterystaple');
+    await register(page, 'correcthorsebatterystaple!');
     await expect(page.locator('main').getByRole('alert')).toContainText(
       'appeared in a data breach',
     );

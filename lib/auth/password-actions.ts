@@ -13,7 +13,11 @@ import { accountSignInEnabled, currentUser } from './auth';
 import { database } from './db';
 import { oauthIntentCookie } from './oauth-intent';
 import { hashPassword, parseUsername, verifyPassword } from './password';
-import { passwordValidationMessage, validPassword } from './password-policy';
+import {
+  passwordValidationMessage,
+  validPassword,
+  validPasswordForVerification,
+} from './password-policy';
 import { passwordScreeningError } from './password-screening';
 import { accountFailure, configurationFeedback } from './access-errors';
 import { allowPasswordAttempt } from './password-limits';
@@ -48,10 +52,14 @@ export async function submitPassword(
             'Enter a username using 3 to 32 letters, numbers, dots, underscores, or hyphens.',
         }
       : invalidCredentials;
-  if (!validPassword(password))
+  if (typeof password !== 'string')
     return register
       ? { error: passwordValidationMessage(password) }
       : invalidCredentials;
+  if (register && !validPassword(password))
+    return { error: passwordValidationMessage(password) };
+  if (!register && !validPasswordForVerification(password))
+    return invalidCredentials;
   if (register && form.get('confirm-password') !== password) {
     return { error: 'The passwords do not match.' };
   }

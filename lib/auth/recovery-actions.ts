@@ -5,7 +5,11 @@ import { accountSignInEnabled, currentUser } from './auth';
 import { accountFailure, configurationFeedback } from './access-errors';
 import { database } from './db';
 import { hashPassword, parseUsername, verifyPassword } from './password';
-import { passwordValidationMessage, validPassword } from './password-policy';
+import {
+  passwordValidationMessage,
+  validPassword,
+  validPasswordForVerification,
+} from './password-policy';
 import { allowPasswordAttempt } from './password-limits';
 import { passwordScreeningError } from './password-screening';
 import { newRecoveryCode, recoveryCodeHash } from './recovery-code';
@@ -27,7 +31,7 @@ export async function issueRecoveryCode(
   form: FormData,
 ): Promise<RecoveryState> {
   const password = form.get('password');
-  if (!validPassword(password))
+  if (!validPasswordForVerification(password))
     return { error: 'Enter your current password.' };
   try {
     const user = await currentUser();

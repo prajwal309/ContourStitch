@@ -21,6 +21,8 @@ it('shows the active password guidance and accepts passphrases', () => {
   fireEvent.input(input, { target: { value: 'too short' } });
   expect(input.validity.customError).toBe(true);
   expect(input.validationMessage).toBe(passwordLengthMessage);
+  fireEvent.input(input, { target: { value: 'abcdefgh' } });
+  expect(input.validity.customError).toBe(true);
 
   fireEvent.input(input, {
     target: { value: 'A passphrase with spaces! 2026' },
@@ -37,7 +39,7 @@ it('enforces the maximum without adding character composition rules', () => {
   expect(input.validationMessage).toBe(passwordMaxLengthMessage);
 
   fireEvent.input(input, {
-    target: { value: 'a'.repeat(15) },
+    target: { value: 'a'.repeat(14) + '!' },
   });
   expect(input.validity.customError).toBe(false);
 });

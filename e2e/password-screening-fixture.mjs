@@ -3,7 +3,7 @@
 import { createHash } from 'node:crypto';
 
 const breached = createHash('sha1')
-  .update('correcthorsebatterystaple')
+  .update('correcthorsebatterystaple!')
   .digest('hex')
   .toUpperCase();
 const upstream = globalThis.fetch;

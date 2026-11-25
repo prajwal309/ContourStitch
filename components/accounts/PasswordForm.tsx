@@ -44,8 +44,7 @@ export function PasswordForm({
         />
         {mode === 'register' && (
           <p className="muted" id="username-rules">
-            3–32 letters, numbers, dots, underscores, or hyphens. Start with a
-            letter or number.
+            Choose a username with 3–32 characters.
           </p>
         )}
       </div>
