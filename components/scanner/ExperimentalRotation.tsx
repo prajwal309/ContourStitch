@@ -3,6 +3,11 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { HeightForm } from '@/components/measurement/HeightForm';
 import { VideoMeasurementScanner } from '@/components/scanner/VideoMeasurementScanner';
+import {
+  MeasurementConsentForm,
+  useCameraAccessCheck,
+  type MeasurementAccess,
+} from '@/components/consent/MeasurementConsentForm';
 import type { MeasurementEngineId } from '@/lib/reconstruction/types';
 
 const silhouetteViewCounts = [4, 8, 16, 32, 64] as const;
@@ -13,8 +18,12 @@ function isSilhouetteViewCount(
   return silhouetteViewCounts.some((count) => count === value);
 }
 
-export default function ExperimentalRotation() {
-  const [consent, setConsent] = useState(false);
+export default function ExperimentalRotation({
+  access,
+}: {
+  access: MeasurementAccess;
+}) {
+  const verifyCameraAccess = useCameraAccessCheck(access.userId);
   const [step, setStep] = useState<'intro' | 'height' | 'scan'>('intro');
   const [height, setHeight] = useState(170);
   const [engine, setEngine] = useState<MeasurementEngineId>('baseline');
@@ -124,14 +133,6 @@ export default function ExperimentalRotation() {
                 Open the local validation comparison dashboard
               </Link>
             </p>
-            <label className="consent">
-              <input
-                type="checkbox"
-                checked={consent}
-                onChange={(e) => setConsent(e.target.checked)}
-              />{' '}
-              I agree to browser-side camera processing.
-            </label>
             {engine === 'parametric' && (
               <p role="status" className="muted">
                 This option is unavailable until a compatible commercial model
@@ -139,13 +140,12 @@ export default function ExperimentalRotation() {
                 substitute measurements will be generated.
               </p>
             )}
-            <button
-              className="button"
-              disabled={!consent || engine === 'parametric'}
-              onClick={() => setStep('height')}
-            >
-              Continue →
-            </button>
+            <MeasurementConsentForm
+              access={access}
+              onContinue={() => setStep('height')}
+              disabled={engine === 'parametric'}
+              label="Continue →"
+            />
             <Link className="text-button" href="/measure">
               Use the guided video session
             </Link>
@@ -169,6 +169,7 @@ export default function ExperimentalRotation() {
         ) : (
           <VideoMeasurementScanner
             heightCm={height}
+            verifyCameraAccess={verifyCameraAccess}
             engine={engine === 'visual-hull' ? 'visual-hull' : 'baseline'}
             silhouetteViewCount={viewCount}
             onClose={() => setStep('intro')}

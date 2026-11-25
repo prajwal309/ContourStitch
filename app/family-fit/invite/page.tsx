@@ -1,4 +1,7 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { hasAccountAgreements } from '@/lib/consent/store';
+import { agreementReviewPath } from '@/lib/auth/return-path';
 import { currentUser } from '@/lib/auth/auth';
 import { InvitationAccept } from '@/components/family/InvitationAccept';
 
@@ -10,6 +13,8 @@ export const metadata = {
 
 export default async function Invite() {
   const user = await currentUser();
+  if (user && !(await hasAccountAgreements(user.id)))
+    redirect(agreementReviewPath('/family-fit/invite'));
   return (
     <main id="main" className="flow">
       <section className="flow-card">

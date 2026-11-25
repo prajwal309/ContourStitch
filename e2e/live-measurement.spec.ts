@@ -37,8 +37,11 @@ test('guides five poses on device, stops the camera, and saves a corrected resul
   await page.goto('/measure');
   await page
     .getByRole('checkbox', {
-      name: 'I agree to browser-side camera processing.',
+      name: /I consent to camera-based/,
     })
+    .check();
+  await page
+    .getByRole('checkbox', { name: /measurements are estimates/ })
     .check();
   await page.getByRole('button', { name: /Continue privately/ }).click();
   await page
@@ -124,8 +127,11 @@ test('the real on-device model withholds estimates from a blank camera feed', as
   await page.goto('/measure');
   await page
     .getByRole('checkbox', {
-      name: 'I agree to browser-side camera processing.',
+      name: /I consent to camera-based/,
     })
+    .check();
+  await page
+    .getByRole('checkbox', { name: /measurements are estimates/ })
     .check();
   await page.getByRole('button', { name: /Continue privately/ }).click();
   await page.getByRole('button', { name: /Start guided video/ }).click();

@@ -5,6 +5,13 @@ import NextAuth, { type DefaultSession } from 'next-auth';
 import Google from 'next-auth/providers/google';
 import Facebook from 'next-auth/providers/facebook';
 import { PrismaAdapter } from '@auth/prisma-adapter';
+import {
+  accountAgreements,
+  cameraAgreements,
+  matchesVersions,
+} from '@/lib/consent/agreements';
+import { registrationEvents } from '@/lib/consent/store';
+import { accountReturnPath } from './return-path';
 import { authConfiguration } from './configuration';
 import { database } from './db';
 import { oauthIntentCookie, readOAuthIntent } from './oauth-intent';
@@ -121,7 +128,17 @@ export const authentication = authConfigured
           ...adapter,
           // Block account creation if a session expires during a linking attempt.
           async createUser(user) {
-            if (!intent || intent.userId || !oauthIdentity)
+            if (
+              !intent?.registration ||
+              intent.userId ||
+              !oauthIdentity ||
+              !matchesVersions(intent.registration, [
+                ...accountAgreements,
+                ...cameraAgreements,
+              ]) ||
+              (intent.registration.IMPROVEMENT !== undefined &&
+                !matchesVersions(intent.registration, ['IMPROVEMENT']))
+            )
               throw new Error('Account creation is unavailable.');
             // Create the first provider association atomically with the user.
             const { name, email, emailVerified, image } = user;
@@ -132,6 +149,11 @@ export const authentication = authConfigured
                 emailVerified,
                 image,
                 accounts: { create: oauthIdentity },
+                consentEvents: {
+                  create: registrationEvents(
+                    matchesVersions(intent.registration, ['IMPROVEMENT']),
+                  ),
+                },
               },
             });
             createdUserId = created.id;
@@ -175,7 +197,7 @@ export const authentication = authConfigured
         },
         pages: { signIn: '/sign-in', error: '/sign-in' },
         callbacks: {
-          async signIn({ account }) {
+          async signIn({ account, user }) {
             if (!intent || !account || intent.provider !== account.provider)
               return '/sign-in?error=OAuthSession';
             const sessionToken = request?.cookies.get(sessionCookie)?.value;
@@ -189,6 +211,25 @@ export const authentication = authConfigured
             if (activeId !== intent.userId)
               return '/sign-in?error=OAuthSession';
             const { type, provider, providerAccountId } = account;
+            if (!activeId) {
+              const linked = await adapter.getUserByAccount?.({
+                provider,
+                providerAccountId,
+              });
+              if (!linked) {
+                if (user.email && (await adapter.getUserByEmail?.(user.email)))
+                  return '/sign-in?error=OAuthAccountNotLinked';
+                const required = [...accountAgreements, ...cameraAgreements];
+                if (
+                  !intent.registration ||
+                  !matchesVersions(intent.registration, required) ||
+                  (intent.registration.IMPROVEMENT !== undefined &&
+                    !matchesVersions(intent.registration, ['IMPROVEMENT']))
+                ) {
+                  return `/sign-in?mode=register&error=RegistrationRequired&next=${encodeURIComponent(accountReturnPath(intent.nextPath))}`;
+                }
+              }
+            }
             oauthIdentity = { type, provider, providerAccountId };
             return true;
           },

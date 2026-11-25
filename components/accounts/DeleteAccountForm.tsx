@@ -14,8 +14,9 @@ export function DeleteAccountForm({ userId }: { userId: string }) {
       <summary>Delete my account</summary>
       <p>
         This permanently deletes your account, saved fit profiles, and their
-        history. Family groups with other members pass to the earliest member
-        still in the group. Empty groups are deleted.
+        history, and saved consent records. Family groups with other members
+        pass to the earliest member still in the group. Empty groups are
+        deleted.
       </p>
       <p>
         Measurements saved on this device can be deleted from the results page.

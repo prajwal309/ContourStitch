@@ -4,17 +4,51 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { authentication, currentUser, enabledProviders } from './auth';
 import { database } from './db';
-import { accountReturnPath } from './return-path';
+import { accountReturnPath, agreementReviewPath } from './return-path';
 import {
   oauthIntentCookie,
   oauthIntentOptions,
   sealOAuthIntent,
 } from './oauth-intent';
 
+import {
+  accountAgreements,
+  agreementTypes,
+  cameraAgreements,
+  checkedVersions,
+  matchesVersions,
+  type ConsentVersions,
+} from '@/lib/consent/agreements';
+import { hasAccountAgreements } from '@/lib/consent/store';
+
+export async function registerOAuth(nextPath: string, form: FormData) {
+  const provider = form.get('provider');
+  const versions = checkedVersions(form, agreementTypes);
+  if (
+    typeof provider !== 'string' ||
+    !matchesVersions(versions, [...accountAgreements, ...cameraAgreements]) ||
+    (form.has('IMPROVEMENT') && !matchesVersions(versions, ['IMPROVEMENT']))
+  ) {
+    redirect(
+      `/sign-in?mode=register&error=Agreements&next=${encodeURIComponent(accountReturnPath(nextPath))}`,
+    );
+  }
+  await beginOAuth(provider, null, nextPath, versions);
+}
+
 export async function startOAuth(
   provider: string,
   expectedUserId: string | null,
   nextPath?: string,
+) {
+  await beginOAuth(provider, expectedUserId, nextPath);
+}
+
+async function beginOAuth(
+  provider: string,
+  expectedUserId: string | null,
+  nextPath?: string,
+  registration?: ConsentVersions,
 ) {
   if (!authentication || !enabledProviders.some(({ id }) => id === provider)) {
     redirect('/sign-in?error=Configuration');
@@ -23,6 +57,9 @@ export async function startOAuth(
   const user = await currentUser();
   if ((user?.id ?? null) !== expectedUserId)
     redirect('/sign-in?error=OAuthSession');
+
+  if (user && !(await hasAccountAgreements(user.id)))
+    redirect(agreementReviewPath(accountReturnPath(nextPath)));
 
   if (
     user &&
@@ -38,7 +75,10 @@ export async function startOAuth(
   try {
     destination = await authentication.signIn(
       provider,
-      { redirect: false, redirectTo: accountReturnPath(nextPath) },
+      {
+        redirect: false,
+        redirectTo: agreementReviewPath(accountReturnPath(nextPath)),
+      },
       provider === 'google' ? { prompt: 'select_account' } : undefined,
     );
   } catch {
@@ -56,7 +96,13 @@ export async function startOAuth(
 
   (await cookies()).set(
     oauthIntentCookie,
-    sealOAuthIntent(provider, state, expectedUserId),
+    sealOAuthIntent(
+      provider,
+      state,
+      expectedUserId,
+      accountReturnPath(nextPath),
+      registration,
+    ),
     oauthIntentOptions,
   );
   redirect(url.href);

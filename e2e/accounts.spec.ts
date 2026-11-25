@@ -41,6 +41,26 @@ test('guest can save and reload measurements locally', async ({ page }) => {
   }
 });
 
+async function checkRegistration(page: Page, optional = false) {
+  await page
+    .getByRole('link', { name: 'Create an account', exact: true })
+    .click();
+  await expect(
+    page.getByRole('heading', { name: 'Create an account' }),
+  ).toBeVisible();
+  for (const checkbox of await page.getByRole('checkbox').all()) {
+    await expect(checkbox).not.toBeChecked();
+  }
+  for (const checkbox of await page
+    .getByRole('group', { name: 'Required agreements' })
+    .getByRole('checkbox')
+    .all()) {
+    await checkbox.check();
+  }
+  if (optional)
+    await page.getByRole('checkbox', { name: /used to improve/ }).check();
+}
+
 async function completeOAuth(
   page: Page,
   provider: 'google' | 'facebook',
@@ -110,6 +130,7 @@ test('OAuth linking, private cloud profiles, and expired sessions', async ({
       localStorage.setItem(key, JSON.stringify(profile));
     });
     await page.getByRole('link', { name: 'My Fit Profile' }).click();
+    await checkRegistration(page);
     await completeOAuth(
       page,
       'google',
@@ -192,6 +213,8 @@ test('OAuth linking, private cloud profiles, and expired sessions', async ({
     await page.goto('/my-measurements');
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 
+    await other.goto('/sign-in');
+    await checkRegistration(other);
     await completeOAuth(
       other,
       'facebook',
@@ -285,6 +308,7 @@ test('family invitations, private measurement sharing, and account deletion', as
   try {
     await page.goto('/family-fit');
     await page.getByRole('link', { name: 'Sign in to get started' }).click();
+    await checkRegistration(page);
     await completeOAuth(
       page,
       'google',
@@ -324,6 +348,7 @@ test('family invitations, private measurement sharing, and account deletion', as
     const member = await memberContext.newPage();
     await member.goto(invitation);
     await member.getByRole('link', { name: 'Sign in to accept' }).click();
+    await checkRegistration(member);
     await completeOAuth(
       member,
       'facebook',
@@ -499,6 +524,7 @@ test('family invitations, private measurement sharing, and account deletion', as
 
     const stranger = await strangerContext.newPage();
     await stranger.goto('/sign-in');
+    await checkRegistration(stranger);
     await completeOAuth(
       stranger,
       'google',
@@ -561,7 +587,9 @@ test('family invitations, private measurement sharing, and account deletion', as
 async function confirmAccountDeletion(page: Page) {
   await page.goto('/account');
   await page.getByText('Delete my account', { exact: true }).click();
-  await page.getByLabel('Type DELETE to confirm').fill('DELETE');
+  await page
+    .getByLabel('Type DELETE to confirm', { exact: true })
+    .fill('DELETE');
   await page
     .getByRole('button', { name: 'Permanently delete account' })
     .click();
@@ -569,3 +597,223 @@ async function confirmAccountDeletion(page: Page) {
   await page.goto('/account');
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible();
 }
+
+test('registration consent, renewal, withdrawal, and data deletion are persisted', async ({
+  page,
+}) => {
+  test.skip(!databaseUrl, 'Requires a disposable PostgreSQL database');
+  const db = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: databaseUrl }),
+  });
+  const run = randomUUID();
+  const email = `${run}-consent@example.test`;
+  const code = `${run}:consent:google`;
+
+  const readCameraCalls = () =>
+    page.evaluate(
+      () =>
+        (window as Window & { consentTestCameraCalls?: number })
+          .consentTestCameraCalls,
+    );
+
+  try {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.addInitScript(() => {
+      const state = Object.assign(window, { consentTestCameraCalls: 0 });
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: {
+          getUserMedia: async () => {
+            state.consentTestCameraCalls += 1;
+            throw new DOMException('Test denial', 'NotAllowedError');
+          },
+        },
+      });
+    });
+
+    await page.goto('/sign-in?next=%2Faccount');
+    // Existing-account sign-in must never create a new user with no consent.
+    await completeOAuth(page, 'google', code, 'Continue with Google');
+    await expect(
+      page.getByRole('heading', { name: 'Create an account' }),
+    ).toBeVisible();
+    await expect(db.user.findUnique({ where: { email } })).resolves.toBeNull();
+    await page.goto('/sign-in?next=%2Faccount');
+    await checkRegistration(page);
+    const legal = page.getByRole('link', { name: /^Body Measurement Consent/ });
+    const [draft] = await Promise.all([
+      page.waitForEvent('popup'),
+      legal.click(),
+    ]);
+    await expect(
+      draft.getByText('Draft pending legal review', { exact: false }),
+    ).toBeVisible();
+    await draft.close();
+    await expect(
+      page.getByRole('checkbox', { name: /I consent to camera/ }),
+    ).toBeChecked();
+    await expect(
+      page.getByRole('checkbox', { name: /used to improve/ }),
+    ).not.toBeChecked();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(360);
+    await completeOAuth(page, 'google', code, 'Continue with Google');
+    await expect(
+      page.getByRole('heading', { name: 'Privacy & Consent' }),
+    ).toBeVisible();
+
+    const user = await db.user.findUniqueOrThrow({ where: { email } });
+    const where = { userId: user.id };
+    const initial = await db.consentEvent.findMany({ where });
+    expect(initial).toHaveLength(5);
+    expect(
+      initial.filter(
+        ({ status, acceptedAt }) => status === 'ACCEPTED' && acceptedAt,
+      ),
+    ).toHaveLength(4);
+    expect(initial.find(({ type }) => type === 'IMPROVEMENT')).toMatchObject({
+      status: 'DECLINED',
+      acceptedAt: null,
+      revokedAt: null,
+    });
+
+    await page.getByRole('checkbox', { name: /used to improve/ }).check();
+    await page.getByRole('button', { name: 'Save optional consent' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Withdraw optional consent' }),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Withdraw optional consent' })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Save optional consent' }),
+    ).toBeVisible();
+    const history = await db.consentEvent.findMany({
+      where: { ...where, type: 'IMPROVEMENT' },
+      orderBy: { id: 'asc' },
+    });
+    expect(history.map(({ status }) => status)).toEqual([
+      'DECLINED',
+      'ACCEPTED',
+      'REVOKED',
+    ]);
+    expect(history[2].acceptedAt).toEqual(history[1].acceptedAt);
+    expect(history[2].revokedAt).toBeInstanceOf(Date);
+    await page.getByRole('button', { name: 'Withdraw camera consent' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Withdraw camera consent' }),
+    ).toHaveCount(0);
+    await page.goto('/measure/experimental');
+    await page.getByRole('button', { name: 'Continue →' }).click();
+    await expect(
+      page.getByRole('button', { name: 'Continue to video scan' }),
+    ).toHaveCount(0);
+    expect(await readCameraCalls()).toBe(0);
+    await page.goto('/measure');
+    await expect(
+      page.getByRole('checkbox', { name: /I consent to camera/ }),
+    ).not.toBeChecked();
+    await expect(
+      page.getByRole('checkbox', { name: /measurements are estimates/ }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: /Continue privately/ }).click();
+    await expect(
+      page.getByRole('button', { name: /Start guided video/ }),
+    ).toHaveCount(0);
+    expect(await readCameraCalls()).toBe(0);
+    await page.getByRole('checkbox', { name: /I consent to camera/ }).check();
+    await page.getByRole('button', { name: /Continue privately/ }).click();
+    await page.getByRole('button', { name: /Start guided video/ }).click();
+    await expect(page.getByText(/Camera permission was denied/)).toBeVisible();
+    expect(await readCameraCalls()).toBe(1);
+
+    const currentTerms = initial.find(({ type }) => type === 'TERMS')!;
+    // Seed a prior acceptance to exercise deployment of a new agreement version.
+    await db.consentEvent.update({
+      where: { id: currentTerms.id },
+      data: { agreementVersion: 'prior' },
+    });
+    await page.goto('/my-measurements');
+    await expect(
+      page.getByRole('heading', { name: 'Review your agreements' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('checkbox', { name: 'I agree to the Terms of Service.' }),
+    ).not.toBeChecked();
+    await expect(
+      page.getByRole('checkbox', { name: /Privacy Policy/ }),
+    ).toHaveCount(0);
+    await page
+      .getByRole('checkbox', { name: 'I agree to the Terms of Service.' })
+      .check();
+    await page.getByRole('button', { name: 'Accept and continue' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'My Fit Profile' }),
+    ).toBeVisible();
+    const terms = await db.consentEvent.findMany({
+      where: { ...where, type: 'TERMS' },
+      orderBy: { id: 'asc' },
+    });
+    expect(terms.map(({ agreementVersion }) => agreementVersion)).toEqual([
+      'prior',
+      currentTerms.agreementVersion,
+    ]);
+
+    await page.goto('/results');
+    await enterWaist(page, 82, 'Enter');
+    await page.getByRole('button', { name: 'Save on this device' }).click();
+    await page.goto('/my-measurements');
+    await page.getByRole('button', { name: 'Import from this device' }).click();
+    await expect(
+      page.getByText('Measurements saved to your account.'),
+    ).toBeVisible();
+    await page.goto('/account');
+    await page
+      .getByText('Previously accepted versions', { exact: true })
+      .click();
+    await expect(
+      page
+        .getByRole('listitem')
+        .filter({ hasText: 'Terms of Service · Version prior' }),
+    ).toBeVisible();
+    await page.getByText('Delete my measurement data', { exact: true }).click();
+    await page
+      .getByLabel('Type DELETE to confirm measurement deletion')
+      .fill('DELETE');
+    await page
+      .getByRole('button', { name: 'Permanently delete measurements' })
+      .click();
+    await expect(page.getByRole('status')).toContainText(
+      'Measurements deleted from your account and this browser.',
+    );
+    await expect(db.measurementProfile.count({ where })).resolves.toBe(0);
+    await expect(db.user.count({ where: { id: user.id } })).resolves.toBe(1);
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem('contourstitch.profile.v1'),
+      ),
+    ).toBeNull();
+
+    await page.getByRole('checkbox', { name: /used to improve/ }).check();
+    const count = await db.consentEvent.count({ where });
+    await db.session.updateMany({ where, data: { expires: new Date(0) } });
+    await page.getByRole('button', { name: 'Save optional consent' }).click();
+    await expect(page.locator('main').getByRole('alert')).toContainText(
+      'Your sign-in changed',
+    );
+    await expect(db.consentEvent.count({ where })).resolves.toBe(count);
+
+    await page.goto('/sign-in');
+    await expect(page.getByRole('checkbox')).toHaveCount(0);
+    await completeOAuth(page, 'google', code, 'Continue with Google');
+    await expect(
+      page.getByRole('heading', { name: 'My Fit Profile' }),
+    ).toBeVisible();
+    await expect(db.consentEvent.count({ where })).resolves.toBe(count);
+    await confirmAccountDeletion(page);
+    await expect(db.consentEvent.count({ where })).resolves.toBe(0);
+  } finally {
+    await db.user.deleteMany({ where: { email } });
+    await db.$disconnect();
+  }
+});

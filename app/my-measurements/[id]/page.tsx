@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
+import { notFound } from 'next/navigation';
 import { CloudProfileEditor } from '@/components/accounts/CloudProfileEditor';
 import { restoreProfile } from '@/lib/accounts/profile-data';
-import { currentUser } from '@/lib/auth/auth';
+import { requireAgreedAccount } from '@/lib/consent/access';
 import { database } from '@/lib/auth/db';
 import { profileDate } from '@/lib/accounts/dates';
 import { labels } from '@/lib/measurement/types';
@@ -17,8 +17,7 @@ export default async function Profile({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const user = await currentUser();
-  if (!user) redirect('/sign-in');
+  const user = await requireAgreedAccount(`/my-measurements/${id}`);
 
   const saved = await database().measurementProfile.findFirst({
     where: { id, userId: user.id },

@@ -1,10 +1,16 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import ExperimentalRotation from '@/components/scanner/ExperimentalRotation';
+
+vi.mock('@/lib/consent/actions', () => ({ authorizeMeasurement: vi.fn() }));
 
 describe('experimental engine selection', () => {
   it('discloses that parametric fitting is unavailable without its licensed runtime', () => {
-    render(<ExperimentalRotation />);
+    render(
+      <ExperimentalRotation
+        access={{ userId: null, required: ['CAMERA', 'ACCURACY'] }}
+      />,
+    );
     const parametric = screen.getByRole('radio', {
       name: /Parametric 3D Body Fitting — Beta/,
     });
@@ -14,13 +20,19 @@ describe('experimental engine selection', () => {
       /commercial model license and PyTorch inference service/,
     );
     fireEvent.click(
-      screen.getByLabelText('I agree to browser-side camera processing.'),
+      screen.getByLabelText(
+        'I consent to camera-based body measurement processing.',
+      ),
     );
     expect(screen.getByRole('button', { name: 'Continue →' })).toBeDisabled();
   });
 
   it('exposes view-count ablations for the independent visual hull', () => {
-    render(<ExperimentalRotation />);
+    render(
+      <ExperimentalRotation
+        access={{ userId: null, required: ['CAMERA', 'ACCURACY'] }}
+      />,
+    );
     fireEvent.click(
       screen.getByRole('radio', {
         name: /Multi-View Silhouette Reconstruction — Beta/,

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { restoreProfile } from '@/lib/accounts/profile-data';
 import { currentUser } from '@/lib/auth/auth';
 import { database } from '@/lib/auth/db';
+import { hasAccountAgreements } from '@/lib/consent/store';
 import { getProduct } from './catalog';
 import { preferences, readExtraMeasurements } from './fit';
 
@@ -20,6 +21,9 @@ export async function saveOutfit(
     return {
       error: 'Your session changed. Sign in again to save your outfit.',
     };
+
+  if (!(await hasAccountAgreements(userId)))
+    return { error: 'Review the current account agreements before saving.' };
 
   const product = getProduct(productKey);
   const variantKey = form.get('variant');

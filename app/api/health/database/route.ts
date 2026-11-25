@@ -14,7 +14,7 @@ export async function GET() {
       );
 
     const [schema] = await database().$queryRaw<{ ready: boolean }[]>`
-      SELECT COUNT(*) = 12 AS ready
+      SELECT COUNT(*) = 13 AS ready
       FROM information_schema.tables
       WHERE table_schema = 'public'
         AND table_type = 'BASE TABLE'
@@ -22,6 +22,7 @@ export async function GET() {
           'User',
           'Account',
           'Session',
+          'ConsentEvent',
           'MeasurementProfile',
           'MeasurementRevision',
           'MeasurementObservation',

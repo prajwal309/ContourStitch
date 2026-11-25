@@ -24,12 +24,14 @@ export function VideoMeasurementScanner({
   engine: selectedEngine = 'baseline',
   silhouetteViewCount = 16,
   engineFactory = createScannerVisionEngine,
+  verifyCameraAccess,
 }: {
   heightCm: number;
   onClose: () => void;
   engine?: Extract<MeasurementEngineId, 'baseline' | 'visual-hull'>;
   silhouetteViewCount?: 4 | 8 | 16 | 32 | 64;
   engineFactory?: () => Promise<VisionEngine>;
+  verifyCameraAccess?: () => Promise<void>;
 }) {
   const video = useRef<HTMLVideoElement>(null);
   const [facing, setFacing] = useState<'environment' | 'user'>('environment');
@@ -146,6 +148,8 @@ export function VideoMeasurementScanner({
     window.addEventListener('orientationchange', interrupt);
     async function start() {
       try {
+        if (verifyCameraAccess) await verifyCameraAccess();
+        if (stopped) return;
         stream = await requestCamera(facing);
         if (stopped) {
           releaseCamera(stream);
@@ -240,6 +244,7 @@ export function VideoMeasurementScanner({
     selectedEngine,
     silhouetteViewCount,
     engineFactory,
+    verifyCameraAccess,
   ]);
   function restart() {
     setPrediction(null);

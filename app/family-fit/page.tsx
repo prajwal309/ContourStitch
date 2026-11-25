@@ -1,14 +1,18 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { hasAccountAgreements } from '@/lib/consent/store';
 import { CreateGroupForm } from '@/components/family/GroupForms';
 import { currentUser } from '@/lib/auth/auth';
 import { database } from '@/lib/auth/db';
-import { signInFor } from '@/lib/auth/return-path';
+import { agreementReviewPath, signInFor } from '@/lib/auth/return-path';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Family Fit Studio | ContourStitch' };
 
 export default async function FamilyFit() {
   const user = await currentUser();
+  if (user && !(await hasAccountAgreements(user.id)))
+    redirect(agreementReviewPath('/family-fit'));
   const groups = user
     ? await database().familyMembership.findMany({
         where: { userId: user.id },

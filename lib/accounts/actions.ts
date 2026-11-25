@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { currentUser } from '@/lib/auth/auth';
 import { leaveAccount } from '@/lib/auth/actions';
 import { database } from '@/lib/auth/db';
+import { hasAccountAgreements } from '@/lib/consent/store';
 import { prepareProfile } from './profile-data';
 
 async function authorized(expectedUserId: string) {
@@ -22,6 +23,7 @@ export async function createCloudProfile(
 ) {
   const user = await authorized(expectedUserId);
   if (!user) return sessionError;
+  if (!(await hasAccountAgreements(user.id))) return sessionError;
 
   const data = prepareProfile(input);
   if (!data) return invalidError;
@@ -72,6 +74,7 @@ export async function updateCloudProfile(
 ) {
   const user = await authorized(expectedUserId);
   if (!user) return sessionError;
+  if (!(await hasAccountAgreements(user.id))) return sessionError;
 
   const data = prepareProfile(input);
   if (!data) return invalidError;
@@ -263,4 +266,35 @@ export async function deleteAccount(
   }
   await leaveAccount();
   return {};
+}
+
+export async function deleteAccountMeasurements(
+  expectedUserId: string,
+  _: { error?: string; saved?: boolean },
+  form: FormData,
+): Promise<{ error?: string; saved?: boolean }> {
+  const user = await authorized(expectedUserId);
+  if (!user)
+    return { error: 'Your session changed. Sign in again to continue.' };
+  if (form.get('confirmation') !== 'DELETE')
+    return { error: 'Type DELETE to confirm.' };
+
+  try {
+    const db = database();
+    await db.$transaction(
+      [
+        db.outfitSelection.deleteMany({ where: { userId: user.id } }),
+        db.measurementProfile.deleteMany({ where: { userId: user.id } }),
+      ],
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+    revalidatePath('/my-measurements');
+    revalidatePath('/my-measurements/[id]', 'page');
+    revalidatePath('/family-fit/[id]', 'page');
+    return { saved: true };
+  } catch {
+    return {
+      error: 'Your measurements could not be deleted. Please try again.',
+    };
+  }
 }

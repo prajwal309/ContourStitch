@@ -1,8 +1,7 @@
 import Link from 'next/link';
-import { notFound, redirect } from 'next/navigation';
-import { currentUser } from '@/lib/auth/auth';
+import { notFound } from 'next/navigation';
+import { requireAgreedAccount } from '@/lib/consent/access';
 import { database } from '@/lib/auth/db';
-import { signInFor } from '@/lib/auth/return-path';
 import { profileDate } from '@/lib/accounts/dates';
 import { invitationState } from '@/lib/family/invitation-state';
 import { InvitationPanel } from '@/components/family/GroupForms';
@@ -24,8 +23,7 @@ export default async function Group({
 }) {
   const { id } = await params;
   if (!/^[a-z0-9]{25}$/.test(id)) notFound();
-  const user = await currentUser();
-  if (!user) redirect(signInFor(`/family-fit/${id}`));
+  const user = await requireAgreedAccount(`/family-fit/${id}`);
 
   const db = database();
   const group = await db.familyGroup.findUnique({

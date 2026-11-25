@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { currentUser } from '@/lib/auth/auth';
 import { database } from '@/lib/auth/db';
+import { hasAccountAgreements } from '@/lib/consent/store';
 import { getCollection } from '@/lib/shop/catalog';
 
 type Response = { error?: string; code?: string; groupId?: string };
@@ -20,6 +21,8 @@ export async function createGroup(
   form: FormData,
 ): Promise<Response> {
   if ((await currentUser())?.id !== userId) return { error: expiredSession };
+  if (!(await hasAccountAgreements(userId)))
+    return { error: 'Review the current account agreements to continue.' };
   const name = form.get('name');
   const occasion = form.get('occasion');
   const collection = form.get('collection');
@@ -63,6 +66,8 @@ export async function createInvitation(
   groupId: string,
 ): Promise<Response> {
   if ((await currentUser())?.id !== userId) return { error: expiredSession };
+  if (!(await hasAccountAgreements(userId)))
+    return { error: 'Review the current account agreements to continue.' };
   const code = randomBytes(32).toString('hex');
   try {
     const group = await database().familyGroup.findUnique({
@@ -113,6 +118,8 @@ export async function joinGroup(
   code: unknown,
 ): Promise<Response> {
   if ((await currentUser())?.id !== userId) return { error: expiredSession };
+  if (!(await hasAccountAgreements(userId)))
+    return { error: 'Review the current account agreements to continue.' };
   const invalid = {
     error:
       'This invitation is invalid, expired, revoked, or already used. Ask the organizer for a new link.',

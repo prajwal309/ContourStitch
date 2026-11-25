@@ -33,6 +33,7 @@ type Props = {
   useReference: boolean;
   onReview: (report: MeasurementReport) => void;
   engineFactory?: () => Promise<VisionEngine>;
+  verifyCameraAccess?: () => Promise<void>;
 };
 
 type Facing = 'environment' | 'user';
@@ -83,6 +84,7 @@ function CameraRun({
   onRetry,
   onSwitch,
   engineFactory = createScannerVisionEngine,
+  verifyCameraAccess,
 }: Props & { facing: Facing; onRetry: () => void; onSwitch: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -279,6 +281,8 @@ function CameraRun({
 
     async function start() {
       try {
+        if (verifyCameraAccess) await verifyCameraAccess();
+        if (stopped) return;
         const requested = await requestCamera(facing);
         if (stopped || !element) {
           releaseCamera(requested);
@@ -317,7 +321,7 @@ function CameraRun({
       window.removeEventListener('orientationchange', interrupt);
       window.removeEventListener('pagehide', interrupt);
     };
-  }, [engineFactory, facing, heightCm, useReference]);
+  }, [engineFactory, facing, heightCm, useReference, verifyCameraAccess]);
 
   function begin(calibration: Calibration) {
     scan.current = new GuidedScan(calibration);

@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { currentUser } from '@/lib/auth/auth';
 import { database } from '@/lib/auth/db';
+import { hasAccountAgreements } from '@/lib/consent/store';
 
 type Result = { error?: string; message?: string };
 
@@ -35,6 +36,9 @@ export async function updateFamilyShare(
     !/^[a-z0-9]{25}$/.test(revisionId)
   )
     return { error: 'Choose one of your saved measurement sets.' };
+
+  if (!(await hasAccountAgreements(user.id)))
+    return { error: 'Review the current account agreements before sharing.' };
 
   try {
     const saved = await database().$transaction(async (tx) => {

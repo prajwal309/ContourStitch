@@ -1,8 +1,7 @@
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
 import { CloudProfileSources } from '@/components/accounts/CloudProfileSources';
 import { profileDate } from '@/lib/accounts/dates';
-import { currentUser } from '@/lib/auth/auth';
+import { requireAgreedAccount } from '@/lib/consent/access';
 import { database } from '@/lib/auth/db';
 import { brand } from '@/lib/brand';
 
@@ -10,8 +9,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My Fit Profile | ContourStitch' };
 
 export default async function MyFitProfile() {
-  const user = await currentUser();
-  if (!user) redirect('/sign-in');
+  const user = await requireAgreedAccount('/my-measurements');
 
   const db = database();
   const profiles = await db.measurementProfile.findMany({

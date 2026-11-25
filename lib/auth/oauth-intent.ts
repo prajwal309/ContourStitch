@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import type { ConsentVersions } from '@/lib/consent/agreements';
 import { authConfiguration } from './configuration';
 
 export const oauthIntentLifetime = 15 * 60;
@@ -21,6 +22,8 @@ type OAuthIntent = {
   state: string;
   userId: string | null;
   expiresAt: number;
+  nextPath: string;
+  registration?: ConsentVersions;
 };
 
 function signature(payload: string) {
@@ -34,11 +37,15 @@ export function sealOAuthIntent(
   provider: string,
   state: string,
   userId: string | null,
+  nextPath: string,
+  registration?: ConsentVersions,
 ) {
   const intent: OAuthIntent = {
     provider,
     state,
     userId,
+    registration,
+    nextPath,
     expiresAt: Date.now() + oauthIntentLifetime * 1_000,
   };
   const payload = Buffer.from(JSON.stringify(intent)).toString('base64url');

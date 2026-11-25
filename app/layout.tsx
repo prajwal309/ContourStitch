@@ -5,6 +5,7 @@ import localFont from 'next/font/local';
 
 import { SessionProvider } from '@/components/SessionProvider';
 import { brand } from '@/lib/brand';
+import { agreementPath } from '@/lib/consent/agreements';
 
 import './globals.css';
 
@@ -124,6 +125,10 @@ export default function RootLayout({
             </Link>
 
             <span>{brand.tagline}</span>
+            <nav className="footer-legal" aria-label="Legal">
+              <Link href={agreementPath('TERMS')}>Terms of Service</Link>
+              <Link href={agreementPath('PRIVACY')}>Privacy Policy</Link>
+            </nav>
           </footer>
         </SessionProvider>
       </body>

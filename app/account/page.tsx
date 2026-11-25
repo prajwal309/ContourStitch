@@ -5,7 +5,8 @@ import { startOAuth, leaveAccount } from '@/lib/auth/actions';
 import { signInFor } from '@/lib/auth/return-path';
 import { database } from '@/lib/auth/db';
 import { DisplayNameForm } from '@/components/accounts/DisplayNameForm';
-import { DeleteAccountForm } from '@/components/accounts/DeleteAccountForm';
+import { PrivacySettings } from '@/components/consent/PrivacySettings';
+import { readAcceptedVersions, readConsent } from '@/lib/consent/store';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My Account | ContourStitch' };
@@ -14,10 +15,14 @@ export default async function AccountPage() {
   const user = await currentUser();
   if (!user) redirect(signInFor('/account'));
 
-  const accounts = await database().account.findMany({
-    where: { userId: user.id },
-    select: { provider: true },
-  });
+  const [accounts, consent, acceptedVersions] = await Promise.all([
+    database().account.findMany({
+      where: { userId: user.id },
+      select: { provider: true },
+    }),
+    readConsent(user.id),
+    readAcceptedVersions(user.id),
+  ]);
 
   return (
     <main id="main" className="market-page">
@@ -65,9 +70,13 @@ export default async function AccountPage() {
               Sign out
             </button>
           </form>
-          <DeleteAccountForm userId={user.id} />
         </section>
       </div>
+      <PrivacySettings
+        userId={user.id}
+        state={consent}
+        acceptedVersions={acceptedVersions}
+      />
     </main>
   );
 }
