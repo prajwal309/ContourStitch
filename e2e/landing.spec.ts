@@ -276,10 +276,7 @@ test('the sample measurement demo starts at the front stage and keeps user flows
   );
   await expect(
     footer.getByRole('link', { name: 'Contact & feedback' }),
-  ).toHaveAttribute(
-    'href',
-    'https://github.com/prajwal309/ContourStitch/issues',
-  );
+  ).toHaveAttribute('href', '/contact');
   await expect(
     footer.getByRole('link', { name: 'Terms of Service' }),
   ).toHaveAttribute('href', agreementPath('TERMS'));
@@ -290,6 +287,7 @@ test('the sample measurement demo starts at the front stage and keeps user flows
     '/family-fit',
     '/my-measurements',
     '/results',
+    '/contact',
     '/founder',
     agreementPath('TERMS'),
     agreementPath('PRIVACY'),

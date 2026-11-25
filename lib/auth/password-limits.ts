@@ -1,24 +1,12 @@
 import 'server-only';
 
-import { createHash, randomInt } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
 import { headers } from 'next/headers';
-import { database } from './db';
-
-async function consume(key: string, limit: number) {
-  const [accepted] = await database().$queryRaw<{ attempts: number }[]>`
-    INSERT INTO "PasswordAttempt" ("key", "attempts", "expiresAt")
-    VALUES (${key}, 1, (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') + interval '10 minutes')
-    ON CONFLICT ("key") DO UPDATE SET
-      "attempts" = CASE WHEN "PasswordAttempt"."expiresAt" <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
-        THEN 1 ELSE "PasswordAttempt"."attempts" + 1 END,
-      "expiresAt" = CASE WHEN "PasswordAttempt"."expiresAt" <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')
-        THEN excluded."expiresAt" ELSE "PasswordAttempt"."expiresAt" END
-    WHERE "PasswordAttempt"."expiresAt" <= (CURRENT_TIMESTAMP AT TIME ZONE 'UTC') OR "PasswordAttempt"."attempts" < ${limit}
-    RETURNING "attempts"
-  `;
-  return Boolean(accepted);
-}
+import {
+  consumeRateLimit,
+  pruneRateLimitsOccasionally,
+} from '@/lib/rate-limit';
 
 export async function allowPasswordAttempt(
   mode: 'register' | 'sign-in' | 'recover' | 'recovery-code',
@@ -33,13 +21,9 @@ export async function allowPasswordAttempt(
     .update(source && isIP(source) ? source : 'shared')
     .digest('hex');
 
-  if (randomInt(64) === 0) {
-    await database().passwordAttempt.deleteMany({
-      where: { expiresAt: { lte: new Date() } },
-    });
-  }
+  await pruneRateLimitsOccasionally();
   if (
-    !(await consume(
+    !(await consumeRateLimit(
       `${mode}:source:${sourceKey}`,
       mode === 'sign-in' ? 60 : 12,
     ))
@@ -47,5 +31,8 @@ export async function allowPasswordAttempt(
     return false;
   if (mode === 'register') return true;
   const usernameKey = createHash('sha256').update(username).digest('hex');
-  return consume(`${mode}:user:${usernameKey}`, mode === 'sign-in' ? 10 : 5);
+  return consumeRateLimit(
+    `${mode}:user:${usernameKey}`,
+    mode === 'sign-in' ? 10 : 5,
+  );
 }

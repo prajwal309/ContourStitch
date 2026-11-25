@@ -14,9 +14,7 @@ export function SiteFooter() {
         </div>
         <nav aria-label="Footer">
           <Link href="/founder">Founders</Link>
-          <a href="https://github.com/prajwal309/ContourStitch/issues">
-            Contact &amp; feedback
-          </a>
+          <Link href="/contact">Contact &amp; feedback</Link>
           <Link href={agreementPath('TERMS')}>Terms of Service</Link>
           <Link href={agreementPath('PRIVACY')}>Privacy Policy</Link>
         </nav>
