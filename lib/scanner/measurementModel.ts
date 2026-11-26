@@ -10,7 +10,7 @@ export const outputNames = [
   'neckCm',
 ] as const;
 export type Prediction = Record<(typeof outputNames)[number], number>;
-export type ModelMetadata = {
+type ModelMetadata = {
   version: string;
   featureNames: string[];
   outputNames: string[];

@@ -29,7 +29,7 @@
 
 ## Testing and quality
 
-- **Unit and component tests:** Vitest 4.1.11 with React Testing Library 16.3.3, `user-event`, `jest-dom`, and JSDOM
+- **Unit and component tests:** Vitest 4.1.11 with React Testing Library 16.3.3, `jest-dom`, and JSDOM
 - **End-to-end tests:** Playwright 1.63.0
 - **Linting:** ESLint 9.39.5 with `eslint-config-next`
 - **Formatting:** Prettier 3.9.8

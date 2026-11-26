@@ -17,7 +17,7 @@ import type { Calibration } from './calibration';
 type Torso = 'chest' | 'waist' | 'hip';
 type Dimension = Torso | 'neck';
 type Sides = NonNullable<MeasurementEstimate['sidesCm']>;
-export type SampleQuality = {
+type SampleQuality = {
   landmarkConfidence: number;
   viewAlignment: number;
   imageQuality: number;

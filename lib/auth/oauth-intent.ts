@@ -4,7 +4,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { ConsentVersions } from '@/lib/consent/agreements';
 import { authConfiguration } from './configuration';
 
-export const oauthIntentLifetime = 15 * 60;
+const oauthIntentLifetime = 15 * 60;
 const { secure } = authConfiguration;
 export const oauthIntentCookie = secure
   ? '__Host-contourstitch-oauth'

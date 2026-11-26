@@ -55,11 +55,11 @@ export const voiceGuidanceConfig = {
   speechPitch: 1,
 } as const;
 
-export function isEnglishLanguage(language: string) {
+function isEnglishLanguage(language: string) {
   return /^en(?:[-_]|$)/i.test(language.trim());
 }
 
-export function voiceIdentity(voice: SpeechSynthesisVoice) {
+function voiceIdentity(voice: SpeechSynthesisVoice) {
   return voice.voiceURI || `${voice.name}|${voice.lang}`;
 }
 
@@ -74,7 +74,7 @@ export function selectEnglishVoice(voices: readonly SpeechSynthesisVoice[]) {
   );
 }
 
-export function offlineAudioForInstruction(text: string) {
+function offlineAudioForInstruction(text: string) {
   const message = text.toLowerCase().replace(/[’']/g, "'");
   const matches: readonly [RegExp, keyof typeof offlineVoiceInstructions][] = [
     [/\bwelcome to contourstitch\b/, 'welcome'],

@@ -27,7 +27,6 @@ import {
   missingAgreements,
   checkedRegistrationVersions,
   validRegistrationVersions,
-  registrationAgreements,
   type ConsentState,
 } from '@/lib/consent/agreements';
 
@@ -103,9 +102,35 @@ describe('server consent checks', () => {
       saved: true,
     });
     expect(mocks.acceptMissing).toHaveBeenCalledWith(
-      { ...acceptedAccount, BODY_MEASUREMENT: undefined },
+      acceptedAccount,
       measurementAgreements,
     );
+  });
+
+  it('authorizes a signed-in user with current measurement consent without recording it again', async () => {
+    const state: ConsentState = {
+      ...acceptedAccount,
+      BODY_MEASUREMENT: {
+        type: 'BODY_MEASUREMENT',
+        status: 'ACCEPTED',
+        agreementVersion: agreements.BODY_MEASUREMENT.version,
+        acceptedAt,
+        revokedAt: null,
+      },
+    };
+    mocks.currentUser.mockResolvedValue({ id: 'owner' });
+    mocks.changeConsent.mockImplementation(async (_, change) => {
+      expect(change(state)).toEqual([]);
+      return true;
+    });
+    expect(await authorizeMeasurement('owner', {}, new FormData())).toEqual({
+      saved: true,
+    });
+    expect(await authorizeMeasurement('owner', {}, cameraForm())).toEqual({
+      saved: true,
+    });
+    expect(mocks.acceptMissing).not.toHaveBeenCalled();
+    expect(mocks.revalidatePath).not.toHaveBeenCalled();
   });
 
   it('marks only outdated agreements as needing renewal', () => {
@@ -120,7 +145,7 @@ describe('server consent checks', () => {
 
 it('requires account agreements at registration without requiring measurement consent', () => {
   const form = new FormData();
-  for (const type of registrationAgreements)
+  for (const type of accountAgreements)
     form.set(`version-${type}`, agreements[type].version);
   expect(validRegistrationVersions(checkedRegistrationVersions(form))).toBe(
     false,

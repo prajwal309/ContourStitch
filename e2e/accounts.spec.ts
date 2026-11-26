@@ -748,6 +748,23 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     await expect(
       page.getByRole('button', { name: 'Withdraw measurement consent' }),
     ).toBeVisible();
+    const measurementEvents = { ...where, type: 'BODY_MEASUREMENT' as const };
+    const firstConsentCount = await db.consentEvent.count({
+      where: measurementEvents,
+    });
+    expect(firstConsentCount).toBe(1);
+    await page.goto('/measure');
+    await expect(
+      page.getByRole('group', { name: 'Required agreements' }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: /Continue privately/ }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Set your scale' }),
+    ).toBeVisible();
+    await expect(
+      db.consentEvent.count({ where: measurementEvents }),
+    ).resolves.toBe(firstConsentCount);
+    await page.goto('/account');
     await page
       .getByRole('button', { name: 'Withdraw measurement consent' })
       .click();
@@ -794,15 +811,15 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     await expect(
       page.getByRole('heading', { name: 'Review your agreements' }),
     ).toBeVisible();
+    const review = page.getByRole('group', { name: 'Required agreements' });
+    const accountAgreement = review.getByRole('checkbox', {
+      name: 'I agree to the Terms of Service and acknowledge the Privacy Policy.',
+    });
+    await expect(accountAgreement).not.toBeChecked();
     await expect(
-      page.getByRole('checkbox', { name: 'I agree to the Terms of Service.' }),
-    ).not.toBeChecked();
-    await expect(
-      page.getByRole('checkbox', { name: /Privacy Policy/ }),
-    ).toHaveCount(0);
-    await page
-      .getByRole('checkbox', { name: 'I agree to the Terms of Service.' })
-      .check();
+      review.getByRole('link', { name: /^Privacy Policy/ }),
+    ).toHaveAttribute('target', '_blank');
+    await accountAgreement.check();
     await page.getByRole('button', { name: 'Accept and continue' }).click();
     await expect(
       page.getByRole('heading', { name: 'My Fit Profile' }),
@@ -815,6 +832,9 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
       'prior',
       currentTerms.agreementVersion,
     ]);
+    await expect(
+      db.consentEvent.count({ where: { ...where, type: 'PRIVACY' } }),
+    ).resolves.toBe(1);
 
     await page.goto('/results');
     await enterWaist(page, 82, 'Enter');

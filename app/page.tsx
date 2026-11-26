@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { FitPassport } from '@/components/landing/FitPassport';
 import { ScanDemo } from '@/components/landing/ScanDemo';
-import { agreementPath } from '@/lib/consent/agreements';
+import { AgreementLink } from '@/components/consent/AgreementLink';
 
 const steps = [
   {
@@ -235,10 +235,10 @@ export default function Home() {
             ))}
           </ul>
           <div className="landing-actions">
-            <Link href={agreementPath('PRIVACY')} className="landing-inline">
+            <AgreementLink type="PRIVACY" className="landing-inline">
               Read the Privacy Policy{' '}
               <ArrowUpRight size={16} aria-hidden="true" />
-            </Link>
+            </AgreementLink>
             <Link href="/results" className="landing-inline">
               {measurementCopy.manualOption}{' '}
               <ArrowRight size={16} aria-hidden="true" />

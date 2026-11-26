@@ -2,9 +2,6 @@ import type { MeasurementEstimate } from '@/lib/measurement/types';
 
 export type MeasurementEngineId = 'baseline' | 'parametric' | 'visual-hull';
 
-export type EngineAvailability =
-  { available: true } | { available: false; reason: string };
-
 export type SilhouetteObservation = {
   angleDegrees: number;
   width: number;

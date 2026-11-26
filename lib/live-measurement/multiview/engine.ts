@@ -37,7 +37,7 @@ import {
 
 type Snapshot = ReturnType<GuidedScan['snapshot']>;
 type Estimate = Snapshot['progressive'][number];
-export type MultiViewEstimate = Omit<Estimate, 'key'> & {
+type MultiViewEstimate = Omit<Estimate, 'key'> & {
   key: Estimate['key'] | 'outseam';
   status: 'Estimating' | 'Refining' | 'Acquired' | 'Insufficient Data';
   priorWeight: 0 | 1;
@@ -63,7 +63,7 @@ export const supportedMeasurements = [
   'hip',
   'outseam',
 ] as const;
-export const multiViewKeys = [
+const multiViewKeys = [
   ...progressiveMeasurementKeys,
   'outseam',
 ] as const;

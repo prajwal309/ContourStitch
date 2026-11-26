@@ -30,6 +30,12 @@ const saveError = {
   error: 'Your choices could not be saved. Please try again.',
 };
 
+function refreshConsentPages() {
+  revalidatePath('/account');
+  revalidatePath('/measure');
+  revalidatePath('/measure/experimental');
+}
+
 export async function acceptAccountAgreements(
   expectedUserId: string,
   next: string,
@@ -69,6 +75,7 @@ export async function authorizeMeasurement(
       : { error: changedAgreements };
   }
   let error: string | undefined;
+  let accepted = false;
   try {
     const saved = await changeConsent(user.id, (state) => {
       if (missingAgreements(state, accountAgreements).length) {
@@ -76,19 +83,20 @@ export async function authorizeMeasurement(
           'Review the current account agreements before starting. Reload this page to continue.';
         return [];
       }
-      if (!matchesVersions(versions, measurementAgreements)) {
+      const missing = missingAgreements(state, measurementAgreements);
+      if (!missing.length) return [];
+      if (!matchesVersions(versions, missing)) {
         error = changedAgreements;
         return [];
       }
-      return acceptMissing(
-        { ...state, BODY_MEASUREMENT: undefined },
-        measurementAgreements,
-      );
+      accepted = true;
+      return acceptMissing(state, missing);
     });
     if (!saved) return changedSession;
   } catch {
     return saveError;
   }
+  if (accepted) refreshConsentPages();
   return error ? { error } : { saved: true };
 }
 
@@ -158,9 +166,7 @@ export async function updateConsentPreference(
             ? 'Review the current account agreements before saving measurement consent.'
             : 'Review the current account agreements before opting in.',
       };
-    revalidatePath('/account');
-    revalidatePath('/measure');
-    revalidatePath('/measure/experimental');
+    refreshConsentPages();
     return { saved: true };
   } catch {
     return saveError;

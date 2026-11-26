@@ -5,7 +5,7 @@ import {
   type ProgressiveMeasurementKey,
 } from './progressive';
 
-export type MeasurementProgressState =
+type MeasurementProgressState =
   | 'prior'
   | 'observing'
   | 'refining'

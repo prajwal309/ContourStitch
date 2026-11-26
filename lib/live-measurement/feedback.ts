@@ -4,7 +4,7 @@ import {
   type MeasurementKey,
 } from '@/lib/measurement/types';
 
-export const acquisitionMilestones = [10, 25, 50, 75, 90, 100] as const;
+const acquisitionMilestones = [10, 25, 50, 75, 90, 100] as const;
 
 export function acquisitionProgress(
   estimates: readonly { key: MeasurementKey }[],

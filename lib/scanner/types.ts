@@ -1,4 +1,3 @@
-import type { VisionFrame } from '@/lib/vision/types';
 import type { SilhouetteObservation } from '@/lib/reconstruction/types';
 export type ScanState =
   | 'FIND_PERSON'
@@ -61,7 +60,7 @@ export const featureNames = [
   'armLengthRatio',
   'scanQuality',
 ] as const;
-export type FeatureName = (typeof featureNames)[number];
+type FeatureName = (typeof featureNames)[number];
 export type BodyScanFeatures = Record<FeatureName, number | null>;
 export type FrameFeatures = {
   shoulder: number | null;
@@ -73,7 +72,7 @@ export type FrameFeatures = {
   arm: number | null;
 };
 export type Candidate = { quality: number; features: FrameFeatures };
-export type ScanQuality = {
+type ScanQuality = {
   overall: number;
   warnings: string[];
   frontQuality: number;
@@ -99,8 +98,3 @@ export type ScanSnapshot = {
   analysis: FrameAnalysis | null;
   result: ScanResult | null;
 };
-export type AnalyzeFrame = (
-  frame: VisionFrame,
-  previous: VisionFrame | null,
-  previousAngle: number | null,
-) => FrameAnalysis;

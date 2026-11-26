@@ -5,7 +5,7 @@ import type {
   VisualHullResult,
 } from './types';
 
-export const visualHullConfig = {
+const visualHullConfig = {
   minimumViews: 4,
   maximumViews: 64,
   maximumAngularGapDegrees: 135,

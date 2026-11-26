@@ -3,14 +3,16 @@ import { DeleteAccountForm } from '@/components/accounts/DeleteAccountForm';
 import { profileDate } from '@/lib/accounts/dates';
 import { agreementReviewPath } from '@/lib/auth/return-path';
 import {
+  accountAgreements,
   agreements,
   isArchivedAgreement,
+  missingAgreements,
   type Agreement,
   type ConsentState,
 } from '@/lib/consent/agreements';
 import { documents } from '@/lib/consent/documents';
 import { reviewableAgreements } from '@/lib/consent/store';
-import { AgreementLink } from './AgreementFields';
+import { AgreementLink } from './AgreementLink';
 import { ConsentPreference, DeleteMeasurementsForm } from './PrivacyControls';
 
 export function PrivacySettings({
@@ -100,11 +102,9 @@ export function PrivacySettings({
               return (
                 <li key={`${type}-${agreementVersion}`}>
                   {Object.hasOwn(documents[type], agreementVersion) ? (
-                    <AgreementLink
-                      type={type}
-                      version={agreementVersion}
-                      label={label}
-                    />
+                    <AgreementLink type={type} version={agreementVersion}>
+                      {label}
+                    </AgreementLink>
                   ) : (
                     label
                   )}
@@ -115,9 +115,11 @@ export function PrivacySettings({
           </ul>
         </details>
       )}
-      <Link className="text-button" href={agreementReviewPath('/account')}>
-        Review account agreements
-      </Link>
+      {missingAgreements(state, accountAgreements).length > 0 && (
+        <Link className="text-button" href={agreementReviewPath('/account')}>
+          Review account agreements
+        </Link>
+      )}
       <DeleteMeasurementsForm userId={userId} />
       <DeleteAccountForm userId={userId} />
     </section>

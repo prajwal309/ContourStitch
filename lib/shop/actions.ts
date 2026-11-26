@@ -117,22 +117,3 @@ export async function saveOutfit(
     return { error: 'Your outfit could not be saved. Please try again.' };
   }
 }
-
-export async function removeOutfit(
-  userId: string,
-  selectionId: string,
-): Promise<Feedback> {
-  if ((await currentUser())?.id !== userId)
-    return { error: 'Your session changed. Sign in again to continue.' };
-  try {
-    await database().outfitSelection.deleteMany({
-      where: { id: selectionId, userId },
-    });
-    revalidatePath('/account');
-    revalidatePath('/family-fit/[id]', 'page');
-    revalidatePath('/shop/[slug]', 'page');
-    return { saved: true };
-  } catch {
-    return { error: 'Your outfit could not be removed. Please try again.' };
-  }
-}

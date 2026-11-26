@@ -25,6 +25,6 @@ export async function measurementAccess(path: string) {
     redirect(agreementReviewPath(path));
   return {
     userId: user?.id ?? null,
-    required: [...measurementAgreements],
+    required: missingAgreements(state, measurementAgreements),
   };
 }

@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { brand } from '@/lib/brand';
-import { agreementPath } from '@/lib/consent/agreements';
+import { AgreementLink } from '@/components/consent/AgreementLink';
 
 export function SiteFooter() {
   return (
@@ -15,8 +15,8 @@ export function SiteFooter() {
         <nav aria-label="Footer">
           <Link href="/founder">Founders</Link>
           <Link href="/contact">Contact &amp; feedback</Link>
-          <Link href={agreementPath('TERMS')}>Terms of Service</Link>
-          <Link href={agreementPath('PRIVACY')}>Privacy Policy</Link>
+          <AgreementLink type="TERMS" />
+          <AgreementLink type="PRIVACY" />
         </nav>
       </div>
     </footer>

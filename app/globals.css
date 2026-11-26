@@ -1797,7 +1797,9 @@ progress {
 }
 
 .agreement-options legend {
+  margin: 0;
   padding-inline: 0.375rem;
+  font: inherit;
   font-weight: 700;
 }
 
@@ -1807,31 +1809,22 @@ progress {
   font-size: 0.875rem;
 }
 
-.agreement-options .consent,
-.consent-status .consent {
+.consent-with-agreement {
   min-height: 44px;
   margin: 0;
-}
-.agreement-options .consent {
   padding-block: var(--space-1);
 }
-.consent-with-agreement > div {
+.consent-with-agreement label {
   min-width: 0;
   flex: 1;
-}
-.consent-with-agreement label {
-  display: inline;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
 }
 
-.agreement-options a,
-.consent-status a,
-.legal-document a {
+.agreement-link {
   text-decoration: underline;
   text-underline-offset: 0.18em;
-}
-
-.sign-in-card .agreement-options {
-  margin-bottom: 0.25rem;
 }
 
 .privacy-settings {
@@ -1898,11 +1891,6 @@ progress {
 .agreement-history {
   padding-inline-start: 1.25rem;
   list-style: disc;
-}
-
-.agreement-history a {
-  text-decoration: underline;
-  text-underline-offset: 0.18em;
 }
 
 .password-field {

@@ -12,7 +12,7 @@ export type Section = (typeof sections)[number];
 export const paths = ['shoulder', 'arm', 'sleeve', 'torso', 'outseam'] as const;
 export type Path = (typeof paths)[number];
 export type Anchor = 'torso' | 'thigh';
-export type Paths = Partial<Record<Path, readonly number[]>>;
+type Paths = Partial<Record<Path, readonly number[]>>;
 
 export type RegionObservation = {
   anchor: Anchor;

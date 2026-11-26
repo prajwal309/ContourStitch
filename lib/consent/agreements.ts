@@ -34,7 +34,6 @@ export const measurementAgreements = ['BODY_MEASUREMENT'] as const;
 export function isArchivedAgreement(type: Agreement) {
   return type === 'CAMERA' || type === 'ACCURACY';
 }
-export const registrationAgreements = accountAgreements;
 
 export type ConsentVersions = Partial<Record<Agreement, string>>;
 export type ConsentState = Partial<Record<Agreement, ConsentEvent>>;
@@ -76,14 +75,14 @@ export function matchesVersions(
 
 export function validRegistrationVersions(versions: ConsentVersions) {
   return (
-    matchesVersions(versions, registrationAgreements) &&
+    matchesVersions(versions, accountAgreements) &&
     (versions.IMPROVEMENT === undefined ||
       matchesVersions(versions, ['IMPROVEMENT']))
   );
 }
 
 export function checkedRegistrationVersions(form: FormData): ConsentVersions {
-  return checkedVersions(form, [...registrationAgreements, 'IMPROVEMENT']);
+  return checkedVersions(form, [...accountAgreements, 'IMPROVEMENT']);
 }
 
 export function checkedVersions(

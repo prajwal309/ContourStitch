@@ -3,10 +3,12 @@
 import { useActionState } from 'react';
 import { deleteAccountMeasurements } from '@/lib/accounts/actions';
 import { updateConsentPreference } from '@/lib/consent/actions';
-import { agreements } from '@/lib/consent/agreements';
 import { deleteProfile } from '@/lib/storage/profile';
 import { useSession } from '@/components/SessionProvider';
-import { AgreementLink, BodyMeasurementAgreement } from './AgreementFields';
+import {
+  BodyMeasurementAgreement,
+  ImprovementAgreement,
+} from './AgreementFields';
 
 type Choice =
   | 'revoke-body-measurement'
@@ -36,29 +38,7 @@ export function ConsentPreference({
     <form className="agreement-flow" action={action}>
       <input type="hidden" name="choice" value={choice} />
       {choice === 'allow-body-measurement' && <BodyMeasurementAgreement />}
-      {choice === 'allow-improvement' && (
-        <>
-          <input
-            type="hidden"
-            name="version-IMPROVEMENT"
-            value={agreements.IMPROVEMENT.version}
-          />
-          <div className="consent consent-with-agreement">
-            <input
-              id="privacy-improvement-consent"
-              type="checkbox"
-              name="IMPROVEMENT"
-              required
-            />
-            <div>
-              <label htmlFor="privacy-improvement-consent">
-                I allow my measurement data to be used to improve ContourStitch.
-              </label>{' '}
-              (<AgreementLink type="IMPROVEMENT" />)
-            </div>
-          </div>
-        </>
-      )}
+      {choice === 'allow-improvement' && <ImprovementAgreement required />}
       <button className="secondary-button" disabled={pending}>
         {pending ? 'Saving…' : choiceLabels[choice]}
       </button>

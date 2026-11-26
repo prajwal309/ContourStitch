@@ -33,7 +33,7 @@ export const poses = [
 ] as const;
 export type Pose = (typeof poses)[number]['id'];
 export type Bounds = NonNullable<ReturnType<typeof maskBounds>>;
-export type Point = readonly [number, number];
+type Point = readonly [number, number];
 
 export const leftArm = [11, 13, 15] as const;
 export const rightArm = [12, 14, 16] as const;

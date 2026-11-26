@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { AgreementLink } from '@/components/consent/AgreementLink';
 import {
   activeAgreementTypes,
   agreementPath,
@@ -86,7 +86,7 @@ export default async function LegalDocument({
               .filter((key) => key !== type)
               .map((key) => (
                 <li key={key}>
-                  <Link href={agreementPath(key)}>{agreements[key].title}</Link>
+                  <AgreementLink type={key} />
                 </li>
               ))}
           </ul>

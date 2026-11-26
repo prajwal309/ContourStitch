@@ -3,7 +3,7 @@ import { maskBounds } from '@/lib/vision/segmentation';
 import type { VisionFrame } from '@/lib/vision/types';
 import type { SilhouetteObservation } from './types';
 
-export const normalizedSilhouetteSize = 64;
+const normalizedSilhouetteSize = 64;
 
 export function normalizeSilhouette(
   frame: VisionFrame,
