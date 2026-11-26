@@ -680,12 +680,13 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     const user = await db.user.findUniqueOrThrow({ where: { email } });
     const where = { userId: user.id };
     const initial = await db.consentEvent.findMany({ where });
-    expect(initial).toHaveLength(4);
+    expect(initial).toHaveLength(3);
     expect(
-      initial.filter(
-        ({ status, acceptedAt }) => status === 'ACCEPTED' && acceptedAt,
-      ),
-    ).toHaveLength(3);
+      initial
+        .filter(({ status, acceptedAt }) => status === 'ACCEPTED' && acceptedAt)
+        .map(({ type }) => type)
+        .sort(),
+    ).toEqual(['PRIVACY', 'TERMS']);
     expect(initial.find(({ type }) => type === 'IMPROVEMENT')).toMatchObject({
       status: 'DECLINED',
       acceptedAt: null,
@@ -714,9 +715,6 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     ]);
     expect(history[2].acceptedAt).toEqual(history[1].acceptedAt);
     expect(history[2].revokedAt).toBeInstanceOf(Date);
-    await page
-      .getByRole('button', { name: 'Withdraw measurement consent' })
-      .click();
     await expect(
       page.getByRole('button', { name: 'Withdraw measurement consent' }),
     ).toHaveCount(0);
@@ -749,6 +747,12 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
       .click();
     await expect(
       page.getByRole('button', { name: 'Withdraw measurement consent' }),
+    ).toBeVisible();
+    await page
+      .getByRole('button', { name: 'Withdraw measurement consent' })
+      .click();
+    await expect(
+      page.getByRole('button', { name: 'Save measurement consent' }),
     ).toBeVisible();
     await page.goto('/measure/experimental');
     await page.getByRole('button', { name: 'Continue →' }).click();
