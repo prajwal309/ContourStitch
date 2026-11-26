@@ -12,6 +12,11 @@ model User {
   email             String?              @unique
   emailVerified     DateTime?
   image             String?
+  firstName         String?
+  lastName          String?
+  phone             String?
+  measurementUnit   MeasurementUnit      @default(cm)
+  fitPreference     FitPreference         @default(regular)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   consentEvents     ConsentEvent[]
@@ -94,6 +99,12 @@ model Session {
 enum MeasurementUnit {
   cm
   in
+}
+
+enum FitPreference {
+  slim
+  regular
+  relaxed
 }
 
 enum MeasurementKey {

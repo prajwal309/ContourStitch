@@ -9,7 +9,16 @@ import {
 } from '@/lib/rate-limit';
 
 export async function allowPasswordAttempt(
-  mode: 'register' | 'sign-in' | 'recover' | 'recovery-code',
+  mode:
+    | 'register'
+    | 'sign-in'
+    | 'recover'
+    | 'recovery-code'
+    | 'change-username'
+    | 'change-password'
+    | 'session-management'
+    | 'delete-account'
+    | 'delete-measurements',
   username: string,
 ) {
   // Vercel sets this header at its edge. Use a shared bucket without a trusted client address.

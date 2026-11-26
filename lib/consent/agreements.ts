@@ -1,6 +1,6 @@
 export const agreements = {
   TERMS: { slug: 'terms', title: 'Terms of Service', version: '2' },
-  PRIVACY: { slug: 'privacy', title: 'Privacy Policy', version: '5' },
+  PRIVACY: { slug: 'privacy', title: 'Privacy Policy', version: '6' },
   CAMERA: {
     slug: 'body-measurement-consent',
     title: 'Body Measurement Consent',

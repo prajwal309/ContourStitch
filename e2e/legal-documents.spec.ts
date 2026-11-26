@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const activeDocuments = [
   { slug: 'terms', title: 'Terms of Service', version: '2' },
-  { slug: 'privacy', title: 'Privacy Policy', version: '5' },
+  { slug: 'privacy', title: 'Privacy Policy', version: '6' },
   {
     slug: 'body-measurement-policy',
     title: 'Body Measurement Consent & Accuracy Policy',

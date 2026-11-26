@@ -1,6 +1,7 @@
 'use server';
 
 import { Prisma } from '@prisma/client';
+import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
@@ -24,7 +25,7 @@ import { allowPasswordAttempt } from './password-limits';
 import { agreementReviewPath } from './return-path';
 import { newSession, sessionToken, writeSessionCookie } from './sessions';
 
-export type PasswordFeedback = { error?: string };
+export type PasswordFeedback = { error?: string; saved?: boolean };
 
 const invalidCredentials = {
   error: 'Check your username and password and try again.',
@@ -143,4 +144,61 @@ export async function submitPassword(
   }
 
   redirect(agreementReviewPath(nextPath));
+}
+
+export async function changePassword(
+  expectedUserId: string,
+  _: PasswordFeedback,
+  form: FormData,
+): Promise<PasswordFeedback> {
+  const currentPassword = form.get('currentPassword');
+  const password = form.get('newPassword');
+  if (!validPasswordForVerification(currentPassword))
+    return { error: 'Enter your current password.' };
+  if (!validPassword(password))
+    return { error: passwordValidationMessage(password) };
+  if (password !== form.get('confirmPassword'))
+    return { error: 'The new passwords do not match.' };
+
+  try {
+    const user = await currentUser();
+    if (!user || user.id !== expectedUserId)
+      return { error: 'Your session changed. Sign in again to continue.' };
+
+    const db = database();
+    const login = await db.passwordLogin.findUnique({
+      where: { userId: user.id },
+      select: { username: true, passwordHash: true },
+    });
+    if (!login) return { error: 'A password is not set up for this account.' };
+    if (!(await allowPasswordAttempt('change-password', login.username)))
+      return throttled;
+    if (!(await verifyPassword(currentPassword, login.passwordHash)))
+      return { error: 'The current password is incorrect.' };
+    const screening = await passwordScreeningError(password);
+    if (screening) return { error: screening };
+
+    const passwordHash = await hashPassword(password);
+    const token = await sessionToken();
+    const updated = await db.$transaction(async (tx) => {
+      const result = await tx.passwordLogin.updateMany({
+        where: { userId: user.id, passwordHash: login.passwordHash },
+        data: { passwordHash, recoveryCodeHash: null },
+      });
+      if (!result.count) return false;
+      await tx.session.deleteMany({
+        where: {
+          userId: user.id,
+          ...(token ? { sessionToken: { not: token } } : {}),
+        },
+      });
+      return true;
+    });
+    if (!updated)
+      return { error: 'Your password changed in another session. Try again.' };
+    revalidatePath('/account');
+    return { saved: true };
+  } catch (error) {
+    return accountFailure('change-password', error);
+  }
 }

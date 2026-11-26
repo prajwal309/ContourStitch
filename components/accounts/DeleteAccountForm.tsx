@@ -3,7 +3,13 @@
 import { useActionState } from 'react';
 import { deleteAccount } from '@/lib/accounts/actions';
 
-export function DeleteAccountForm({ userId }: { userId: string }) {
+export function DeleteAccountForm({
+  userId,
+  hasPassword,
+}: {
+  userId: string;
+  hasPassword: boolean;
+}) {
   const [state, submit, pending] = useActionState(
     deleteAccount.bind(null, userId),
     {},
@@ -22,6 +28,17 @@ export function DeleteAccountForm({ userId }: { userId: string }) {
         Measurements saved on this device can be deleted from the results page.
       </p>
       <form className="studio-form" action={submit}>
+        {hasPassword && (
+          <label>
+            Current password
+            <input
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+        )}
         <label>
           Type DELETE to confirm
           <input name="confirmation" required autoComplete="off" />

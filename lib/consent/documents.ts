@@ -247,6 +247,17 @@ export const documents: Record<Agreement, Record<string, Document>> = {
         text: 'When you create or reset a password, the server checks publicly documented breach data using Have I Been Pwned. The request sends only the first five characters of a SHA-1 password hash, without your username, full hash, or password. We store passwords as salted scrypt hashes. If you create a one-time recovery code, we store its hash and remove it when you use or replace the code. A password reset ends existing ContourStitch sessions.',
       },
     ],
+    '6': [
+      ...privacyV4,
+      {
+        title: 'Password screening and recovery',
+        text: 'When you create or reset a password, the server checks publicly documented breach data using Have I Been Pwned. The request sends only the first five characters of a SHA-1 password hash, without your username, full hash, or password. We store passwords as salted scrypt hashes. If you create a one-time recovery code, we store its hash and remove it when you use or replace the code. A password reset ends existing ContourStitch sessions.',
+      },
+      {
+        title: 'Optional profile picture',
+        text: 'You may choose to upload one PNG, JPEG, or WebP profile picture up to 200 KB. The picture is stored with your account and included in your personal information download. It is separate from measurement photos: measurement camera frames, video, pose landmarks, and silhouettes remain in your browser and are not uploaded. You may replace or remove the profile picture in My Account.',
+      },
+    ],
   },
   BODY_MEASUREMENT: {
     '1': [
@@ -395,6 +406,7 @@ export const documentLastUpdated: Record<
     '3': '2026-11-24',
     '4': '2026-11-24',
     '5': '2026-11-25',
+    '6': '2026-11-25',
   },
   BODY_MEASUREMENT: { '1': '2026-11-25' },
   CAMERA: { '1': null, '2': '2026-11-24', '3': '2026-11-24' },

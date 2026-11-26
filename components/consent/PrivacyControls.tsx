@@ -52,7 +52,13 @@ export function ConsentPreference({
   );
 }
 
-export function DeleteMeasurementsForm({ userId }: { userId: string }) {
+export function DeleteMeasurementsForm({
+  userId,
+  hasPassword,
+}: {
+  userId: string;
+  hasPassword: boolean;
+}) {
   const { setReport } = useSession();
   const [state, action, pending] = useActionState(
     async (previous: { error?: string; saved?: boolean }, form: FormData) => {
@@ -82,6 +88,17 @@ export function DeleteMeasurementsForm({ userId }: { userId: string }) {
         from this browser. Your account stays open.
       </p>
       <form className="studio-form" action={action}>
+        {hasPassword && (
+          <label>
+            Current password
+            <input
+              name="currentPassword"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
+          </label>
+        )}
         <label>
           Type DELETE to confirm measurement deletion
           <input name="confirmation" autoComplete="off" required />

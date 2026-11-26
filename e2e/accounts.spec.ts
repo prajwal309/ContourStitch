@@ -676,6 +676,7 @@ test('registration consent, renewal, withdrawal, and data deletion are persisted
     await expect(
       page.getByRole('heading', { name: 'Privacy & Consent' }),
     ).toBeVisible();
+    await page.waitForLoadState('load');
 
     const user = await db.user.findUniqueOrThrow({ where: { email } });
     const where = { userId: user.id };

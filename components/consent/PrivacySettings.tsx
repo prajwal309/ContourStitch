@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { DeleteAccountForm } from '@/components/accounts/DeleteAccountForm';
+import { Download } from 'lucide-react';
 import { profileDate } from '@/lib/accounts/dates';
 import { agreementReviewPath } from '@/lib/auth/return-path';
 import {
@@ -17,10 +18,12 @@ import { ConsentPreference, DeleteMeasurementsForm } from './PrivacyControls';
 
 export function PrivacySettings({
   userId,
+  hasPassword,
   state,
   acceptedVersions,
 }: {
   userId: string;
+  hasPassword: boolean;
   state: ConsentState;
   acceptedVersions: {
     type: Agreement;
@@ -35,12 +38,27 @@ export function PrivacySettings({
   );
   return (
     <section
-      className="studio-panel privacy-settings"
-      id="privacy-consent"
+      className="account-panel privacy-settings"
+      id="privacy-data"
       aria-labelledby="privacy-consent-title"
     >
-      <h2 id="privacy-consent-title">Privacy &amp; Consent</h2>
-      <p>Your body. Your data. Your choice.</p>
+      <div className="account-panel-heading">
+        <div>
+          <p className="eyebrow">Data controls</p>
+          <h2 id="privacy-consent-title">Privacy &amp; Consent</h2>
+          <p>
+            Camera measurement consent is separate from account registration
+            agreements and optional data-improvement sharing.
+          </p>
+        </div>
+        <Download aria-hidden="true" />
+      </div>
+      <Link
+        className="secondary-button account-export-link"
+        href="/account/export"
+      >
+        Download my personal information
+      </Link>
       <dl className="consent-status">
         {reviewableAgreements(state).map(({ type, event, active }) => (
           <div key={type}>
@@ -120,8 +138,8 @@ export function PrivacySettings({
           Review account agreements
         </Link>
       )}
-      <DeleteMeasurementsForm userId={userId} />
-      <DeleteAccountForm userId={userId} />
+      <DeleteMeasurementsForm userId={userId} hasPassword={hasPassword} />
+      <DeleteAccountForm userId={userId} hasPassword={hasPassword} />
     </section>
   );
 }

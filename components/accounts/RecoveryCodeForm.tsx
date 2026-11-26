@@ -18,7 +18,7 @@ export function RecoveryCodeForm({
 
   return (
     <details className="studio-section">
-      <summary>Password recovery code</summary>
+      <summary>Recovery code</summary>
       <p>
         Save a one-time code somewhere secure to reset your password if you
         forget it. Generating a code replaces your previous one.
